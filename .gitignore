@@ -44,6 +44,9 @@ dist/
 # Test binary
 /test_codexion
 
+# Subject PDF
+*.pdf
+
 # Editor swap / backup files
 *.swp
 *.swo
