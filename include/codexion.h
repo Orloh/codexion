@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/13 21:38:53 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/13 21:43:01 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -87,6 +87,5 @@ typedef struct s_sim
 void		heap_push(t_heap *heap, t_request req);
 t_request	heap_pop(t_heap *heap);
 t_request	*heap_peek(t_heap *heap);
-
 
 #endif
