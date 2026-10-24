@@ -38,6 +38,9 @@
 build/
 dist/
 
+# clangd index
+.cache/
+
 # Project binary
 /codexion
 
