@@ -21,7 +21,7 @@ TESTDIR		= tests
 TEST_SRCS	= $(TESTDIR)/test_main.c \
 			  $(TESTDIR)/test_heap.c \
 			  $(TESTDIR)/test_parse.c
-TEST_OBJS	= $(TEST_SRCS:.c=.o)
+TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o
 TEST_BIN	= test_codexion
 
 all: $(NAME)
