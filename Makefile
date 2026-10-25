@@ -20,8 +20,10 @@ OBJS		= $(SRCS:.c=.o)
 TESTDIR		= tests
 TEST_SRCS	= $(TESTDIR)/test_main.c \
 			  $(TESTDIR)/test_heap.c \
-			  $(TESTDIR)/test_parse.c
-TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o
+			  $(TESTDIR)/test_parse.c \
+			  $(TESTDIR)/test_log.c
+TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o $(SRCDIR)/parse.o \
+			  $(SRCDIR)/log.o
 TEST_BIN	= test_codexion
 
 all: $(NAME)
@@ -32,8 +34,7 @@ $(NAME): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-# Unit tests (heap + parser). Standalone for now: they only link the test
-# sources. Once the heap/parser modules exist, add their objects to TEST_OBJS.
+# Unit tests (heap + parser). Link the modules under test via TEST_OBJS.
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 

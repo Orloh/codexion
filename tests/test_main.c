@@ -5,11 +5,15 @@ int	g_failed	= 0;
 
 void	test_heap(void);
 void	test_parse(void);
+void	test_log(void);
+void	test_log_state(void);
 
 int	main(void)
 {
 	test_heap();
 	test_parse();
+	test_log();
+	test_log_state();
 	printf("%d/%d checks passed\n", g_total - g_failed, g_total);
 	return (g_failed != 0);
 }
