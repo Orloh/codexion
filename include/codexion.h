@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/25 12:28:22 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/26 00:02:24 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -91,6 +91,8 @@ void		heap_push(t_heap *heap, t_request req);
 t_request	heap_pop(t_heap *heap);
 t_request	*heap_peek(t_heap *heap);
 int			parse_args(int argc, char **argv, t_config *config);
+t_sim		*init_sim(t_config *config);
+void		cleanup_sim(t_sim *sim);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
 void		log_state(t_sim *sim, int coder_id, const char *state);
