@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/26 00:02:24 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/26 00:08:02 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -93,6 +93,9 @@ t_request	*heap_peek(t_heap *heap);
 int			parse_args(int argc, char **argv, t_config *config);
 t_sim		*init_sim(t_config *config);
 void		cleanup_sim(t_sim *sim);
+void		arbiter_request(t_coder *coder);
+void		arbiter_release(t_coder *coder);
+void		arbiter_run(t_sim *sim, long now);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
 void		log_state(t_sim *sim, int coder_id, const char *state);

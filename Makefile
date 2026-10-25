@@ -22,9 +22,11 @@ TEST_SRCS	= $(TESTDIR)/test_main.c \
 			  $(TESTDIR)/test_heap.c \
 			  $(TESTDIR)/test_parse.c \
 			  $(TESTDIR)/test_log.c \
-			  $(TESTDIR)/test_init.c
+			  $(TESTDIR)/test_init.c \
+			  $(TESTDIR)/test_arbiter.c
 TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o $(SRCDIR)/parse.o \
-			  $(SRCDIR)/log.o $(SRCDIR)/init.o $(SRCDIR)/cleanup.o
+			  $(SRCDIR)/log.o $(SRCDIR)/init.o $(SRCDIR)/cleanup.o \
+			  $(SRCDIR)/arbiter.o
 TEST_BIN	= test_codexion
 
 all: $(NAME)

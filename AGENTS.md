@@ -17,25 +17,26 @@ Implemented:
   table setup, start timestamp and partial-init cleanup.
 - `src/cleanup.c`: destroys sync objects and frees `scratch`, heap, coders,
   dongles and `sim`.
+- `src/arbiter.c`: reservation-aware grants, FIFO/EDF key snapshots, cooldown
+  release, scratch-based priority pass.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
-  `tests/test_init.c`: 218/218 checks pass with `make test` (valgrind clean).
+  `tests/test_init.c` + `tests/test_arbiter.c`: 253/253 checks pass with
+  `make test` (valgrind clean).
 
 Missing (listed in `Makefile` but no file exists):
-- `src/main.c`, `arbiter.c`, `coder.c`, `monitor.c`.
+- `src/main.c`, `coder.c`, `monitor.c`.
 - Therefore `make` / `make re` currently fails with
   `No rule to make target 'src/main.o'`.
 - `README.md` (required by the subject) does not exist.
 
-Implementation roadmap (suggested build order; full build still needs step 4):
-1. `src/arbiter.c`: atomic both-or-none grab, heap integration, cooldown checks,
-   reservation-aware grants.
-2. `src/coder.c`: compile → debug → refactor loop, interruptible phase waits via
+Implementation roadmap (suggested build order; full build still needs step 3):
+1. `src/coder.c`: compile → debug → refactor loop, interruptible phase waits via
    `pthread_cond_timedwait`.
-3. `src/monitor.c`: polling loop (≤ 10 ms precision), burnout detection,
+2. `src/monitor.c`: polling loop (≤ 10 ms precision), burnout detection,
    finished-counter tracking.
-4. `src/main.c`: entry point tying init, thread creation, joining and cleanup
+3. `src/main.c`: entry point tying init, thread creation, joining and cleanup
    together.
-5. `README.md`: required documentation with AI-usage disclosure and concurrency
+4. `README.md`: required documentation with AI-usage disclosure and concurrency
    analysis.
 
 ## Architectural constraints & rules
@@ -65,7 +66,9 @@ Implementation roadmap (suggested build order; full build still needs step 4):
 - **Arbiter**: reservation-aware. A blocked request reserves its dongles
   (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
   disjoint pairs may still run. `arbiter_run` drains the heap into
-  `sim->scratch` to process requests in priority order.
+  `sim->scratch` to process requests in priority order and broadcasts
+  `dongle_cond` after each pass. `arbiter_request`, `arbiter_release` and
+  `arbiter_run` assume `table_mutex` is already held; they do not lock it.
 - **Condvars**: `stop_cond` for phase waits, `dongle_cond` for grant/cooldown
   waits; use `pthread_cond_broadcast` (not `pthread_cond_signal`).
 - **Dongle mapping** (0-based, circular):
@@ -75,7 +78,8 @@ Implementation roadmap (suggested build order; full build still needs step 4):
 ## Commands
 
 - `make test` — builds `test_codexion` from `tests/*.o` + `src/heap.o` +
-  `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o`, runs it.
+  `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o` +
+  `src/arbiter.o`, runs it.
 - `make` / `make re` — full build; only works after the missing sources exist.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.

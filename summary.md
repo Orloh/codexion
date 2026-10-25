@@ -254,7 +254,7 @@ A coder that wants to compile, under the table mutex:
 When a coder **releases** after compiling, still under the mutex:
 1. Mark both dongles **free**, clear `holder`, set
    `available_at = now + dongle_cooldown`.
-2. Run `arbiter_run`; it broadcasts `dongle_cond` if it grants anything.
+2. Run `arbiter_run`; it broadcasts `dongle_cond` after the pass.
 3. Unlock.
 
 `arbiter_run` (called under `table_mutex`):
@@ -266,7 +266,8 @@ When a coder **releases** after compiling, still under the mutex:
      (set `holder`) and **do not push it back**;
    - otherwise reserve each still-unreserved dongle for this coder and push the
      request back into the heap.
-4. Broadcast `dongle_cond` once if at least one request was granted.
+4. Broadcast `dongle_cond` once after the pass. Waiters always re-check; an
+   ungranted pass merely causes harmless spurious wakeups.
 
 For `N == 1`, `left == right`: check, reserve, grant and release one unique
 dongle — never count the same pointer twice. Use `pthread_cond_broadcast` (not
@@ -567,7 +568,8 @@ timeout expires. Under `table_mutex`:
      `reserved_by == -1`;
    - otherwise reserve each still-unreserved dongle for this coder and push the
      request back into the heap.
-4. Broadcast `dongle_cond` if at least one request was granted.
+4. Broadcast `dongle_cond` after the pass; ungranted waiters re-check and sleep
+   again.
 
 A blocked high-priority request keeps its dongles reserved, so lower requests
 that share them wait. A lower request whose pair is completely disjoint still
@@ -714,8 +716,8 @@ be done by the user.
 
 ### Tools (in the `tests/` scaffolding, not the deliverable)
 
-- **Heap + parser + log unit tests**: plain **`assert`/CHECK** tests, no external
-  C framework, via a dedicated `make test` target.
+- **Heap + parser + log + init + arbiter unit tests**: plain **`assert`/CHECK**
+  tests, no external C framework, via a dedicated `make test` target.
 - **Memory**: `valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1
   ./codexion <args>`.
 - **Data races**: TSAN build (`-fsanitize=thread`) or `valgrind
