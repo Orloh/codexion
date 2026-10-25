@@ -1,0 +1,8 @@
+Evaluation points
+
+1. Validate burnout edge cases.
+2. Verify correct logging and timing tolerances.
+3. Check no dongle duplication and correct state transitions.
+4. Verify cooldown behavior.
+5. Test scheduler differences (EDF vs FIFO).
+6. Validate refactoring timing and log serialization.
