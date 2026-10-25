@@ -7,6 +7,7 @@ void	test_heap(void);
 void	test_parse(void);
 void	test_log(void);
 void	test_log_state(void);
+void	test_init(void);
 
 int	main(void)
 {
@@ -14,6 +15,7 @@ int	main(void)
 	test_parse();
 	test_log();
 	test_log_state();
+	test_init();
 	printf("%d/%d checks passed\n", g_total - g_failed, g_total);
 	return (g_failed != 0);
 }

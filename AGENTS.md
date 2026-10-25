@@ -13,27 +13,29 @@ Implemented:
   (no `atoi` overflow).
 - `src/log.c`: `log_format` formatter and `log_state` with one unbuffered
   `write(1, ...)` under `log_mutex`.
-- `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c`: 150/150
-  checks pass with `make test`.
+- `src/init.c`: simulation/array allocation, sync-object init, dongle/coder
+  table setup, start timestamp and partial-init cleanup.
+- `src/cleanup.c`: destroys sync objects and frees `scratch`, heap, coders,
+  dongles and `sim`.
+- `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
+  `tests/test_init.c`: 218/218 checks pass with `make test` (valgrind clean).
 
 Missing (listed in `Makefile` but no file exists):
-- `src/main.c`, `init.c`, `cleanup.c`, `arbiter.c`, `coder.c`, `monitor.c`.
+- `src/main.c`, `arbiter.c`, `coder.c`, `monitor.c`.
 - Therefore `make` / `make re` currently fails with
   `No rule to make target 'src/main.o'`.
 - `README.md` (required by the subject) does not exist.
 
-Implementation roadmap (suggested build order; full build still needs step 5):
-1. `src/init.c` & `src/cleanup.c`: allocation, mutex/condvar init, error-path
-   unwinding.
-2. `src/arbiter.c`: atomic both-or-none grab, heap integration, cooldown checks,
-   strict-priority reservation.
-3. `src/coder.c`: compile → debug → refactor loop, interruptible phase waits via
+Implementation roadmap (suggested build order; full build still needs step 4):
+1. `src/arbiter.c`: atomic both-or-none grab, heap integration, cooldown checks,
+   reservation-aware grants.
+2. `src/coder.c`: compile → debug → refactor loop, interruptible phase waits via
    `pthread_cond_timedwait`.
-4. `src/monitor.c`: polling loop (≤ 10 ms precision), burnout detection,
+3. `src/monitor.c`: polling loop (≤ 10 ms precision), burnout detection,
    finished-counter tracking.
-5. `src/main.c`: entry point tying init, thread creation, joining and cleanup
+4. `src/main.c`: entry point tying init, thread creation, joining and cleanup
    together.
-6. `README.md`: required documentation with AI-usage disclosure and concurrency
+5. `README.md`: required documentation with AI-usage disclosure and concurrency
    analysis.
 
 ## Architectural constraints & rules
@@ -73,7 +75,7 @@ Implementation roadmap (suggested build order; full build still needs step 5):
 ## Commands
 
 - `make test` — builds `test_codexion` from `tests/*.o` + `src/heap.o` +
-  `src/parse.o` + `src/log.o`, runs it.
+  `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o`, runs it.
 - `make` / `make re` — full build; only works after the missing sources exist.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.
