@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/24 23:59:23 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/25 12:28:22 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,7 @@ typedef struct s_dongle
 	int		id;
 	long	available_at;
 	int		holder;
+	int		reserved_by;
 }	t_dongle;
 
 typedef struct s_coder
@@ -73,10 +74,12 @@ typedef struct s_sim
 	t_dongle		*dongles;
 	t_coder			*coders;
 	t_heap			heap;
+	t_request		*scratch;
 	pthread_mutex_t	table_mutex;
 	pthread_mutex_t	log_mutex;
 	int				stop;
 	pthread_cond_t	stop_cond;
+	pthread_cond_t	dongle_cond;
 	int				finished_counter;
 	long			start_ms;
 	long			arrival_counter;
