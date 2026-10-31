@@ -35,7 +35,7 @@ void	test_init(void)
 	CHECK(table->heap.items != NULL);
 	CHECK(table->scratch != NULL);
 	CHECK(table->heap.size == 0);
-	CHECK(table->stop == false);
+	CHECK(table->stop == 0);
 	CHECK(table->finished_counter == 0);
 	CHECK(table->arrival_counter == 0);
 	CHECK(table->dongles[0].id == 0);
@@ -46,7 +46,7 @@ void	test_init(void)
 	CHECK(table->coders[0].id == 1);
 	CHECK(table->coders[0].last_compile_start == table->start_ms);
 	CHECK(table->coders[0].compiles_done == 0);
-	CHECK(table->coders[0].finished == false);
+	CHECK(table->coders[0].finished == 0);
 	CHECK(table->coders[0].left == &table->dongles[0]);
 	CHECK(table->coders[0].right == &table->dongles[0]);
 	cleanup_table(table);
@@ -66,7 +66,7 @@ void	test_init(void)
 		CHECK(table->coders[i].id == i + 1);
 		CHECK(table->coders[i].last_compile_start == table->start_ms);
 		CHECK(table->coders[i].compiles_done == 0);
-		CHECK(table->coders[i].finished == false);
+		CHECK(table->coders[i].finished == 0);
 		CHECK(table->coders[i].left == &table->dongles[(i + 3) % 4]);
 		CHECK(table->coders[i].right == &table->dongles[i]);
 		i++;

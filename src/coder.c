@@ -113,7 +113,7 @@ void	*coder_routine(void *coder_ptr)
 
 	coder = coder_ptr;
 	table = coder->table;
-	while (true)
+	while (1)
 	{
 		pthread_mutex_lock(&table->table_mutex);
 		if (table->stop)
@@ -123,7 +123,7 @@ void	*coder_routine(void *coder_ptr)
 		}
 		if (coder->compiles_done >= table->config.number_of_compiles_required)
 		{
-			coder->finished = true;
+			coder->finished = 1;
 			table->finished_counter++;
 			pthread_mutex_unlock(&table->table_mutex);
 			return (NULL);

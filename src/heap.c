@@ -13,7 +13,7 @@
 #include "codexion.h"
 #include <stddef.h>
 
-static bool	is_higher_priority(t_request *a, t_request *b)
+static int	is_higher_priority(t_request *a, t_request *b)
 {
 	if (a->key != b->key)
 		return (a->key < b->key);

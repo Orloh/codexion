@@ -12,20 +12,20 @@
 
 #include "codexion.h"
 
-static bool	grantable(t_coder *coder, long now)
+static int	grantable(t_coder *coder, long now)
 {
 	if (coder->left->holder != -1 || coder->left->available_at > now
 		|| coder->left->reserved_by != -1)
-		return (false);
+		return (0);
 	if (coder->left == coder->right)
-		return (true);
+		return (1);
 	if (coder->right->holder != -1 || coder->right->available_at > now
 		|| coder->right->reserved_by != -1)
-		return (false);
-	return (true);
+		return (0);
+	return (1);
 }
 
-static bool	set_pair(t_coder *coder, bool grant)
+static int	set_pair(t_coder *coder, int grant)
 {
 	if (grant)
 	{
@@ -48,9 +48,9 @@ void	arbiter_run(t_table *table, long now)
 {
 	t_request	req;
 	int			i;
-	bool		granted;
+	int			granted;
 
-	granted = false;
+	granted = 0;
 	i = table->config.number_of_coders;
 	while (i > 0)
 		table->dongles[--i].reserved_by = -1;
@@ -58,7 +58,7 @@ void	arbiter_run(t_table *table, long now)
 	{
 		req = heap_pop(&table->heap);
 		if (set_pair(req.coder, grantable(req.coder, now)))
-			granted = true;
+			granted = 1;
 		else
 			table->scratch[i++] = req;
 	}

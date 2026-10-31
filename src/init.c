@@ -80,7 +80,7 @@ static void	init_entries(t_table *table)
 		table->coders[i].id = i + 1;
 		table->coders[i].last_compile_start = table->start_ms;
 		table->coders[i].compiles_done = 0;
-		table->coders[i].finished = false;
+		table->coders[i].finished = 0;
 		table->coders[i].left = &table->dongles[(i + n - 1) % n];
 		table->coders[i].right = &table->dongles[i];
 		i++;

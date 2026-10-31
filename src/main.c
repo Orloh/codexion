@@ -48,7 +48,7 @@ static void	join_threads(pthread_t *threads, int count)
 static void	stop_simulation(t_table *table)
 {
 	pthread_mutex_lock(&table->table_mutex);
-	table->stop = true;
+	table->stop = 1;
 	pthread_cond_broadcast(&table->stop_cond);
 	pthread_cond_broadcast(&table->dongle_cond);
 	pthread_mutex_unlock(&table->table_mutex);

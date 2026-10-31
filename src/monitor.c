@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+#define _XOPEN_SOURCE 500
 #include "codexion.h"
 #include <pthread.h>
 #include <unistd.h>
@@ -48,7 +49,7 @@ static int	check_state(t_table *table, long now)
 	id = find_burned(table, now);
 	if (id != 0)
 	{
-		table->stop = true;
+		table->stop = 1;
 		pthread_cond_broadcast(&table->stop_cond);
 		pthread_cond_broadcast(&table->dongle_cond);
 	}
@@ -62,7 +63,7 @@ void	*monitor_routine(void *table_ptr)
 	int		id;
 
 	table = table_ptr;
-	while (true)
+	while (1)
 	{
 		id = check_state(table, get_now_ms());
 		if (id == -1)

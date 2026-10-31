@@ -45,7 +45,7 @@ static int	capture_monitor(t_table *table, char *buf, int size,
 	{
 		usleep(stop_after_us);
 		pthread_mutex_lock(&table->table_mutex);
-		table->stop = true;
+		table->stop = 1;
 		pthread_cond_broadcast(&table->stop_cond);
 		pthread_cond_broadcast(&table->dongle_cond);
 		pthread_mutex_unlock(&table->table_mutex);
@@ -74,10 +74,10 @@ static void	test_monitor_all_finished(void)
 	if (!table)
 		return ;
 	table->finished_counter = 1;
-	table->coders[0].finished = true;
+	table->coders[0].finished = 1;
 	n = capture_monitor(table, buf, sizeof(buf), -1);
 	CHECK(n == 0);
-	CHECK(table->stop == false);
+	CHECK(table->stop == 0);
 	cleanup_table(table);
 }
 
@@ -97,7 +97,7 @@ static void	test_monitor_burnout(void)
 	n = capture_monitor(table, buf, sizeof(buf), -1);
 	CHECK(n > 0);
 	CHECK(strstr(buf, " 1 burned out\n") != NULL);
-	CHECK(table->stop == true);
+	CHECK(table->stop == 1);
 	cleanup_table(table);
 }
 
@@ -113,7 +113,7 @@ static void	test_monitor_skips_finished(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	table->coders[0].finished = true;
+	table->coders[0].finished = 1;
 	table->coders[0].compiles_done = 1;
 	table->coders[0].last_compile_start = get_now_ms() - 100;
 	table->coders[1].last_compile_start = get_now_ms() - 100;
@@ -122,7 +122,7 @@ static void	test_monitor_skips_finished(void)
 	CHECK(n > 0);
 	CHECK(strstr(buf, " 1 burned out\n") == NULL);
 	CHECK(strstr(buf, " 2 burned out\n") != NULL);
-	CHECK(table->stop == true);
+	CHECK(table->stop == 1);
 	cleanup_table(table);
 }
 
@@ -142,7 +142,7 @@ static void	test_monitor_skips_completed(void)
 	table->coders[0].last_compile_start = get_now_ms() - 100;
 	n = capture_monitor(table, buf, sizeof(buf), 20000);
 	CHECK(n == 0);
-	CHECK(table->stop == true);
+	CHECK(table->stop == 1);
 	cleanup_table(table);
 }
 
@@ -158,10 +158,10 @@ static void	test_monitor_stop_already_set(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	table->stop = true;
+	table->stop = 1;
 	n = capture_monitor(table, buf, sizeof(buf), -1);
 	CHECK(n == 0);
-	CHECK(table->stop == true);
+	CHECK(table->stop == 1);
 	cleanup_table(table);
 }
 
