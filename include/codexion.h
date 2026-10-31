@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/31 15:38:23 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/31 16:00:09 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -101,5 +101,6 @@ void		arbiter_run(t_table *table, long now);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
 void		log_state(t_table *table, int coder_id, const char *state);
+void		*coder_routine(void *arg);
 
 #endif
