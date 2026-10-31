@@ -106,12 +106,12 @@ static int	run_cycle(t_coder *coder)
 	return (sleep_phase(table, table->config.time_to_refactor));
 }
 
-void	*coder_routine(void *arg)
+void	*coder_routine(void *coder_ptr)
 {
 	t_coder	*coder;
 	t_table	*table;
 
-	coder = arg;
+	coder = coder_ptr;
 	table = coder->table;
 	while (true)
 	{

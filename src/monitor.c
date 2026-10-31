@@ -56,12 +56,12 @@ static int	check_state(t_table *table, long now)
 	return (id);
 }
 
-void	*monitor_routine(void *arg)
+void	*monitor_routine(void *table_ptr)
 {
 	t_table	*table;
 	int		id;
 
-	table = arg;
+	table = table_ptr;
 	while (true)
 	{
 		id = check_state(table, get_now_ms());

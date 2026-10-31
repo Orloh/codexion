@@ -101,7 +101,7 @@ void		arbiter_run(t_table *table, long now);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
 void		log_state(t_table *table, int coder_id, const char *state);
-void		*coder_routine(void *arg);
-void		*monitor_routine(void *arg);
+void		*coder_routine(void *coder_ptr);
+void		*monitor_routine(void *table_ptr);
 
 #endif
