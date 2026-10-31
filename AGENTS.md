@@ -23,22 +23,17 @@ Implemented:
 - `src/coder.c`: compile → debug → refactor loop, interruptible phase waits,
   dongle acquisition/release, completion and stop handling.
 - `src/monitor.c`: polling loop, burnout detection, finished-counter tracking.
+- `src/main.c`: thread creation, monitor-first startup, join and cleanup.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
   `tests/test_init.c` + `tests/test_arbiter.c` + `tests/test_coder.c` +
   `tests/test_monitor.c`: 303/303 checks pass with `make test`
   (valgrind clean).
+- `tests/test_integration.py`: end-to-end log/timing/cooldown/burnout checks via
+  `make test-integration`.
+- `README.md`: required 42 documentation, concurrency analysis and AI disclosure.
 
-Missing (listed in `Makefile` but no file exists):
-- `src/main.c`.
-- Therefore `make` / `make re` currently fails with
-  `No rule to make target 'src/main.o'`.
-- `README.md` (required by the subject) does not exist.
-
-Implementation roadmap (suggested build order; full build still needs step 1):
-1. `src/main.c`: entry point tying init, thread creation, joining and cleanup
-   together.
-2. `README.md`: required documentation with AI-usage disclosure and concurrency
-   analysis.
+Build status: `make` / `make re` now succeed. The unit and integration suites are
+the remaining regression checks before defense.
 
 ## Architectural constraints & rules
 
@@ -69,9 +64,10 @@ Implementation roadmap (suggested build order; full build still needs step 1):
   (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
   disjoint pairs may still run. `arbiter_run` drains the heap into
   `table->scratch` to process requests in priority order and broadcasts
-  `dongle_cond` when at least one request is granted. `arbiter_request`,
-  `arbiter_release` and `arbiter_run` assume `table_mutex` is already held;
-  they do not lock it.
+  `dongle_cond` when at least one request is granted. `arbiter_release`
+  broadcasts `dongle_cond` unconditionally after the pass so waiters recompute
+  cooldown/held state. `arbiter_request`, `arbiter_release` and `arbiter_run`
+  assume `table_mutex` is already held; they do not lock it.
 - **Condvars**: `stop_cond` for `sleep_phase` phase waits, `dongle_cond` for
   grant/cooldown waits; use `pthread_cond_broadcast` (not
   `pthread_cond_signal`).
@@ -81,10 +77,11 @@ Implementation roadmap (suggested build order; full build still needs step 1):
 
 ## Commands
 
-- `make test` — builds `test_codexion` from `tests/*.o` + `src/heap.o` +
-  `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o` +
-  `src/arbiter.o` + `src/time.o` + `src/coder.o` + `src/monitor.o`, runs it.
-- `make` / `make re` — full build; only works after the missing sources exist.
+- `make test` — builds `test_codexion` from `tests/*.o` + the module objects,
+  runs the unit suite.
+- `make test-integration` — builds `codexion` and runs
+  `tests/test_integration.py`.
+- `make` / `make re` — full build of the `codexion` executable.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.
 - `compile_flags.txt` is clangd-only; real flags live in the `Makefile`

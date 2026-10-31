@@ -268,7 +268,8 @@ A coder that wants to compile, under the table mutex:
 When a coder **releases** after compiling, still under the mutex:
 1. Mark both dongles **free**, clear `holder`, set
    `available_at = now + dongle_cooldown`.
-2. Run `arbiter_run`; it broadcasts `dongle_cond` if it grants something.
+2. Run `arbiter_run`; then broadcast `dongle_cond` unconditionally, because the
+   release changed dongle state even if no request was granted.
 3. Unlock.
 
 `arbiter_run` (called under `table_mutex`):
@@ -720,9 +721,8 @@ Binary name: **`codexion`**.
 
 The AI was used for: guided planning and Socratic design of this solution (this
 `summary.md`), explanation of POSIX threading concepts, validation/correction of
-the concurrency design, and structuring of the implementation plan. The user
-understands and is responsible for all of it. Actual implementation is still to
-be done by the user.
+the concurrency design, structuring the implementation plan, and reviewing the
+implementation and tests. The user understands and is responsible for all of it.
 
 ## Testing & evaluation strategy
 
@@ -736,8 +736,10 @@ be done by the user.
 - **Data races**: TSAN build (`-fsanitize=thread`) or `valgrind
   --tool=helgrind`. Debug/sanitize builds use a **separate target** — the
   deliverable compiles with exactly `-Wall -Wextra -Werror -pthread`.
-- **Behaviour checker** (own script): run the binary, capture stdout, then
-  validate the log rules (formats, ordering, counts, timestamps).
+- **Integration checker**: `tests/test_integration.py`, run through
+  `make test-integration`; executes the real binary and validates log formats,
+  state order, dongle overlap, cooldown, phase timing, burnout precision,
+  scheduler runs, zero-duration and required-zero cases.
 
 ### Edge cases to test
 
@@ -767,7 +769,7 @@ deadline went undetected).
 
 ### Demo parameters
 
-- **Clean (EDF)**: `5 800 200 200 200 3 50 edf` — runs to completion, no burnout.
+- **Clean (EDF)**: `5 2000 200 200 200 3 50 edf` — runs to completion, no burnout.
 - **Burnout**: `4 300 150 300 300 10 100 fifo` — tight deadline + long phases +
   cooldown ⇒ one burnout within 10 ms.
 - Re-verify feasibility before the defense; show both paths.

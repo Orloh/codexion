@@ -96,4 +96,5 @@ void	arbiter_release(t_coder *coder)
 			+ coder->table->config.dongle_cooldown;
 	}
 	arbiter_run(coder->table, now);
+	pthread_cond_broadcast(&coder->table->dongle_cond);
 }

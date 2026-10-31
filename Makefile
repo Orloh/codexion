@@ -45,6 +45,9 @@ $(NAME): $(OBJS)
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 
+test-integration: $(NAME)
+	python3 tests/test_integration.py ./$(NAME)
+
 $(TEST_BIN): $(TEST_OBJS)
 	$(CC) $(CFLAGS) $(TEST_OBJS) -o $(TEST_BIN)
 
@@ -59,4 +62,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re test
+.PHONY: all clean fclean re test test-integration
