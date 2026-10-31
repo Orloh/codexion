@@ -3,7 +3,6 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 static void	check_format(long timestamp, int coder_id, const char *state,
@@ -13,14 +12,6 @@ static void	check_format(long timestamp, int coder_id, const char *state,
 
 	CHECK(log_format(buf, timestamp, coder_id, state) == (int)strlen(expected));
 	CHECK(strcmp(buf, expected) == 0);
-}
-
-static long	now_ms(void)
-{
-	struct timeval	tv;
-
-	(void)gettimeofday(&tv, NULL);
-	return (tv.tv_sec * 1000L + tv.tv_usec / 1000L);
 }
 
 static int	capture_log(t_table *table, int coder_id, const char *state, char *buf)
@@ -71,7 +62,7 @@ void	test_log_state(void)
 	int		n;
 
 	memset(&table, 0, sizeof(table));
-	table.start_ms = now_ms() - 100;
+	table.start_ms = get_now_ms() - 100;
 	if (pthread_mutex_init(&table.log_mutex, NULL) != 0)
 	{
 		CHECK(0);

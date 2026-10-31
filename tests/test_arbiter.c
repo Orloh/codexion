@@ -1,7 +1,6 @@
 #include "test.h"
 #include "codexion.h"
 #include <limits.h>
-#include <sys/time.h>
 
 static t_config	make_config(int number_of_coders)
 {
@@ -16,14 +15,6 @@ static t_config	make_config(int number_of_coders)
 	config.dongle_cooldown = 50;
 	config.policy = EDF;
 	return (config);
-}
-
-static long	now_ms(void)
-{
-	struct timeval	tv;
-
-	(void)gettimeofday(&tv, NULL);
-	return (tv.tv_sec * 1000L + tv.tv_usec / 1000L);
 }
 
 static t_request	make_request(t_coder *coder, long key)
@@ -99,7 +90,7 @@ static void	test_arbiter_grant_and_release(void)
 	CHECK(table->heap.size == 0);
 	CHECK(table->dongles[0].holder == 1);
 	CHECK(table->dongles[0].reserved_by == -1);
-	before = now_ms();
+	before = get_now_ms();
 	arbiter_release(&table->coders[0]);
 	CHECK(table->dongles[0].holder == -1);
 	CHECK(table->dongles[0].available_at >= before + 50);

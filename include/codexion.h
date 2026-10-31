@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/12 14:04:16 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/26 00:08:02 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/31 15:38:23 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -92,6 +92,7 @@ void		heap_push(t_heap *heap, t_request req);
 t_request	heap_pop(t_heap *heap);
 t_request	*heap_peek(t_heap *heap);
 int			parse_args(int argc, char **argv, t_config *config);
+long		get_now_ms(void);
 t_table		*init_table(t_config *config);
 void		cleanup_table(t_table *table);
 void		arbiter_request(t_coder *coder);

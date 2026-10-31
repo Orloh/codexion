@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 #include "codexion.h"
-#include <sys/time.h>
 
 static bool	grantable(t_coder *coder, long now)
 {
@@ -26,7 +25,7 @@ static bool	grantable(t_coder *coder, long now)
 	return (true);
 }
 
-static void	set_pair(t_coder *coder, bool grant)
+static bool	set_pair(t_coder *coder, bool grant)
 {
 	if (grant)
 	{
@@ -42,37 +41,36 @@ static void	set_pair(t_coder *coder, bool grant)
 			&& coder->right->reserved_by == -1)
 			coder->right->reserved_by = coder->id;
 	}
+	return (grant);
 }
 
 void	arbiter_run(t_table *table, long now)
 {
 	t_request	req;
 	int			i;
+	bool		granted;
 
-	i = 0;
-	while (i < table->config.number_of_coders)
-		table->dongles[i++].reserved_by = -1;
-	i = 0;
+	granted = false;
+	i = table->config.number_of_coders;
+	while (i > 0)
+		table->dongles[--i].reserved_by = -1;
 	while (table->heap.size > 0)
 	{
 		req = heap_pop(&table->heap);
-		if (grantable(req.coder, now))
-			set_pair(req.coder, true);
+		if (set_pair(req.coder, grantable(req.coder, now)))
+			granted = true;
 		else
-		{
-			set_pair(req.coder, false);
 			table->scratch[i++] = req;
-		}
 	}
 	while (i > 0)
 		heap_push(&table->heap, table->scratch[--i]);
-	pthread_cond_broadcast(&table->dongle_cond);
+	if (granted)
+		pthread_cond_broadcast(&table->dongle_cond);
 }
 
 void	arbiter_request(t_coder *coder)
 {
-	t_request		req;
-	struct timeval	tv;
+	t_request	req;
 
 	req.coder = coder;
 	if (coder->table->config.policy == FIFO)
@@ -81,17 +79,14 @@ void	arbiter_request(t_coder *coder)
 		req.key = coder->last_compile_start
 			+ coder->table->config.time_to_burnout;
 	heap_push(&coder->table->heap, req);
-	(void)gettimeofday(&tv, NULL);
-	arbiter_run(coder->table, tv.tv_sec * 1000L + tv.tv_usec / 1000L);
+	arbiter_run(coder->table, get_now_ms());
 }
 
 void	arbiter_release(t_coder *coder)
 {
-	struct timeval	tv;
-	long			now;
+	long	now;
 
-	(void)gettimeofday(&tv, NULL);
-	now = tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+	now = get_now_ms();
 	coder->left->holder = -1;
 	coder->left->available_at = now + coder->table->config.dongle_cooldown;
 	if (coder->left != coder->right)

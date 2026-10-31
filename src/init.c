@@ -13,7 +13,6 @@
 #include "codexion.h"
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 
 static int	alloc_arrays(t_table *table)
 {
@@ -90,8 +89,7 @@ static void	init_entries(t_table *table)
 
 t_table	*init_table(t_config *config)
 {
-	t_table			*table;
-	struct timeval	tv;
+	t_table	*table;
 
 	table = malloc(sizeof(*table));
 	if (!table)
@@ -108,8 +106,7 @@ t_table	*init_table(t_config *config)
 		free_table(table);
 		return (NULL);
 	}
-	(void)gettimeofday(&tv, NULL);
-	table->start_ms = tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+	table->start_ms = get_now_ms();
 	init_entries(table);
 	return (table);
 }

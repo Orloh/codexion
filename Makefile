@@ -14,7 +14,8 @@ SRCS		= $(SRCDIR)/main.c \
 			  $(SRCDIR)/arbiter.c \
 			  $(SRCDIR)/coder.c \
 			  $(SRCDIR)/monitor.c \
-			  $(SRCDIR)/log.c
+			  $(SRCDIR)/log.c \
+			  $(SRCDIR)/time.c
 OBJS		= $(SRCS:.c=.o)
 
 TESTDIR		= tests
@@ -26,7 +27,7 @@ TEST_SRCS	= $(TESTDIR)/test_main.c \
 			  $(TESTDIR)/test_arbiter.c
 TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o $(SRCDIR)/parse.o \
 			  $(SRCDIR)/log.o $(SRCDIR)/init.o $(SRCDIR)/cleanup.o \
-			  $(SRCDIR)/arbiter.o
+			  $(SRCDIR)/arbiter.o $(SRCDIR)/time.o
 TEST_BIN	= test_codexion
 
 all: $(NAME)
@@ -37,7 +38,7 @@ $(NAME): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-# Unit tests (heap + parser). Link the modules under test via TEST_OBJS.
+# Unit tests (all modules). Link the modules under test via TEST_OBJS.
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 

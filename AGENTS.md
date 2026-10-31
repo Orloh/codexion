@@ -6,13 +6,14 @@
 ## Current status & build order
 
 Implemented:
-- `include/codexion.h`: shared structs, `t_policy` (FIFO/EDF), heap/parse/log
-  API.
+- `include/codexion.h`: shared structs, `t_policy` (FIFO/EDF), heap/parse/log/
+  time API.
 - `src/heap.c`: min-heap `heap_push` / `heap_pop` / `heap_peek`.
 - `src/parse.c`: strict argument validation with checked manual conversion
   (no `atoi` overflow).
 - `src/log.c`: `log_format` formatter and `log_state` with one unbuffered
   `write(1, ...)` under `log_mutex`.
+- `src/time.c`: `get_now_ms()` wrapper around `gettimeofday`.
 - `src/init.c`: simulation/array allocation, sync-object init, dongle/coder
   table setup, start timestamp and partial-init cleanup.
 - `src/cleanup.c`: destroys sync objects and frees `scratch`, heap, coders,
@@ -53,10 +54,10 @@ Implementation roadmap (suggested build order; full build still needs step 3):
     scratch, stop flag, counters).
   - `log_mutex` guards stdout (`fd 1`).
   - Never perform I/O while holding `table_mutex`.
-- **Clock & timing**: use `gettimeofday` for timestamps (converted to ms), not
-  `clock_gettime`. Use `pthread_cond_timedwait` with an absolute
-  `CLOCK_REALTIME` timespec for interruptible sleeps and cooldown waits.
-  `usleep` takes microseconds.
+- **Clock & timing**: use `get_now_ms()` (`src/time.c`) for timestamps in
+  milliseconds, not `clock_gettime`. Use `pthread_cond_timedwait` with an
+  absolute `CLOCK_REALTIME` timespec for interruptible sleeps and cooldown
+  waits. `usleep` takes microseconds.
 - **Logging**: no `printf`/`sprintf`/`snprintf`. Build each line in a local
   buffer with hand-rolled integer-to-string formatting, then emit it with a
   single unbuffered `write(1, ...)` under `log_mutex`.
@@ -67,8 +68,9 @@ Implementation roadmap (suggested build order; full build still needs step 3):
   (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
   disjoint pairs may still run. `arbiter_run` drains the heap into
   `table->scratch` to process requests in priority order and broadcasts
-  `dongle_cond` after each pass. `arbiter_request`, `arbiter_release` and
-  `arbiter_run` assume `table_mutex` is already held; they do not lock it.
+  `dongle_cond` when at least one request is granted. `arbiter_request`,
+  `arbiter_release` and `arbiter_run` assume `table_mutex` is already held;
+  they do not lock it.
 - **Condvars**: `stop_cond` for phase waits, `dongle_cond` for grant/cooldown
   waits; use `pthread_cond_broadcast` (not `pthread_cond_signal`).
 - **Dongle mapping** (0-based, circular):
@@ -79,7 +81,7 @@ Implementation roadmap (suggested build order; full build still needs step 3):
 
 - `make test` — builds `test_codexion` from `tests/*.o` + `src/heap.o` +
   `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o` +
-  `src/arbiter.o`, runs it.
+  `src/arbiter.o` + `src/time.o`, runs it.
 - `make` / `make re` — full build; only works after the missing sources exist.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.

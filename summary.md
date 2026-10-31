@@ -157,10 +157,10 @@ it hogs the CPU — around 1 ms is a good balance.
 ### Clock
 
 - Only **`gettimeofday`** is authorized (`clock_gettime` is not in the allowed
-  list).
-- Convert to milliseconds: `tv.tv_sec * 1000 + tv.tv_usec / 1000`.
-- Take **one start reference** at simulation start; log `now_ms - start_ms`, so
-  the first log is `0`.
+  list); all callers use the `get_now_ms()` helper in `src/time.c`.
+- Convert to milliseconds: `tv.tv_sec * 1000L + tv.tv_usec / 1000L`.
+- Take **one start reference** at simulation start; log
+  `get_now_ms() - start_ms`, so the first log is `0`.
 - `usleep` takes **microseconds** (`n` ms → `usleep(n * 1000)`).
 - `pthread_cond_timedwait` needs an **absolute** `struct timespec` on
   `CLOCK_REALTIME` (same epoch as `gettimeofday`), built from the current time
@@ -254,7 +254,7 @@ A coder that wants to compile, under the table mutex:
 When a coder **releases** after compiling, still under the mutex:
 1. Mark both dongles **free**, clear `holder`, set
    `available_at = now + dongle_cooldown`.
-2. Run `arbiter_run`; it broadcasts `dongle_cond` after the pass.
+2. Run `arbiter_run`; it broadcasts `dongle_cond` if it grants something.
 3. Unlock.
 
 `arbiter_run` (called under `table_mutex`):
@@ -266,8 +266,7 @@ When a coder **releases** after compiling, still under the mutex:
      (set `holder`) and **do not push it back**;
    - otherwise reserve each still-unreserved dongle for this coder and push the
      request back into the heap.
-4. Broadcast `dongle_cond` once after the pass. Waiters always re-check; an
-   ungranted pass merely causes harmless spurious wakeups.
+4. Broadcast `dongle_cond` if at least one request was granted.
 
 For `N == 1`, `left == right`: check, reserve, grant and release one unique
 dongle — never count the same pointer twice. Use `pthread_cond_broadcast` (not
@@ -568,8 +567,7 @@ timeout expires. Under `table_mutex`:
      `reserved_by == -1`;
    - otherwise reserve each still-unreserved dongle for this coder and push the
      request back into the heap.
-4. Broadcast `dongle_cond` after the pass; ungranted waiters re-check and sleep
-   again.
+4. Broadcast `dongle_cond` if at least one request was granted.
 
 A blocked high-priority request keeps its dongles reserved, so lower requests
 that share them wait. A lower request whose pair is completely disjoint still
