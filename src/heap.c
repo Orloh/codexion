@@ -6,11 +6,12 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 21:43:18 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/24 22:13:00 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/10/31 14:02:27 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
+#include <stddef.h>
 
 static bool	is_higher_priority(t_request *a, t_request *b)
 {
