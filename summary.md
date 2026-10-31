@@ -161,7 +161,8 @@ it hogs the CPU — around 1 ms is a good balance.
 - Convert to milliseconds: `tv.tv_sec * 1000L + tv.tv_usec / 1000L`.
 - Take **one start reference** at simulation start; log
   `get_now_ms() - start_ms`, so the first log is `0`.
-- `usleep` takes **microseconds** (`n` ms → `usleep(n * 1000)`).
+- `usleep` takes **microseconds** (`n` ms → `usleep(n * 1000)`). Only the
+  monitor uses `usleep` for its polling loop; coder phase waits do not.
 - `pthread_cond_timedwait` needs an **absolute** `struct timespec` on
   `CLOCK_REALTIME` (same epoch as `gettimeofday`), built from the current time
   plus the desired duration.
@@ -174,20 +175,22 @@ it hogs the CPU — around 1 ms is a good balance.
   cooldown waits.
 - The monitor can only wake threads blocked on a condition variable. On stop it
   therefore sets `stop` and broadcasts **both** `stop_cond` and `dongle_cond`.
-- Chosen solution: make the phase waits **interruptible with
-  `pthread_cond_timedwait`** on `stop_cond`, in a loop that re-checks `stop`.
-  `ETIMEDOUT` (from `<errno.h>`) means the full duration elapsed; a normal
-  return means `stop` was set and the coder should exit. This also gives better
-  time precision and no `usleep` drift.
+- Chosen solution: the coder uses `sleep_phase(table, duration)`, which builds
+  an absolute `CLOCK_REALTIME` deadline from `get_now_ms() + duration` and calls
+  `pthread_cond_timedwait` on `stop_cond` in a loop that re-checks `stop`.
+  `ETIMEDOUT` (from `<errno.h>`) means the full duration elapsed; after the
+  timeout it still checks `table->stop`, so a concurrent stop wins and the coder
+  exits. This gives precise timing and no `usleep` drift.
 - Dongle waiters use `dongle_cond` with the same rule: after waking they
   re-check `stop` and exit instead of acquiring dongles.
 
 ```
 lock(&table_mutex);
-abstime = now + duration;
+abstime = get_now_ms() + duration;
 while (!stop)
     if (pthread_cond_timedwait(&stop_cond, &table_mutex, &abstime) == ETIMEDOUT)
         break;                    /* full duration elapsed */
+stopped = stop;                   /* a concurrent stop wins */
 unlock(&table_mutex);
 ```
 

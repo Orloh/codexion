@@ -55,9 +55,10 @@ Implementation roadmap (suggested build order; full build still needs step 2):
   - `log_mutex` guards stdout (`fd 1`).
   - Never perform I/O while holding `table_mutex`.
 - **Clock & timing**: use `get_now_ms()` (`src/time.c`) for timestamps in
-  milliseconds, not `clock_gettime`. Use `pthread_cond_timedwait` with an
-  absolute `CLOCK_REALTIME` timespec for interruptible sleeps and cooldown
-  waits. `usleep` takes microseconds.
+  milliseconds, not `clock_gettime`. Coder phases use `sleep_phase`, which
+  builds an absolute `CLOCK_REALTIME` deadline from `get_now_ms() + duration`
+  and `pthread_cond_timedwait`s on `stop_cond`; a concurrent `stop` wins after
+  timeout. `usleep` (microseconds) is only for the monitor polling loop.
 - **Logging**: no `printf`/`sprintf`/`snprintf`. Build each line in a local
   buffer with hand-rolled integer-to-string formatting, then emit it with a
   single unbuffered `write(1, ...)` under `log_mutex`.
@@ -71,8 +72,9 @@ Implementation roadmap (suggested build order; full build still needs step 2):
   `dongle_cond` when at least one request is granted. `arbiter_request`,
   `arbiter_release` and `arbiter_run` assume `table_mutex` is already held;
   they do not lock it.
-- **Condvars**: `stop_cond` for phase waits, `dongle_cond` for grant/cooldown
-  waits; use `pthread_cond_broadcast` (not `pthread_cond_signal`).
+- **Condvars**: `stop_cond` for `sleep_phase` phase waits, `dongle_cond` for
+  grant/cooldown waits; use `pthread_cond_broadcast` (not
+  `pthread_cond_signal`).
 - **Dongle mapping** (0-based, circular):
   `coder[i].left = dongle[(i + N - 1) % N]`, `coder[i].right = dongle[i]`.
 - Join all threads before destroying mutexes/condvars and freeing memory.
