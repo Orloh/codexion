@@ -714,8 +714,9 @@ be done by the user.
 
 ### Tools (in the `tests/` scaffolding, not the deliverable)
 
-- **Heap + parser + log + init + arbiter unit tests**: plain **`assert`/CHECK**
-  tests, no external C framework, via a dedicated `make test` target.
+- **Heap + parser + log + init + arbiter + coder unit tests**: plain
+  **`assert`/CHECK** tests, no external C framework, via a dedicated
+  `make test` target.
 - **Memory**: `valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1
   ./codexion <args>`.
 - **Data races**: TSAN build (`-fsanitize=thread`) or `valgrind
