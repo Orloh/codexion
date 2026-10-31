@@ -18,7 +18,7 @@
 
 /* Data structs */
 
-typedef struct s_sim	t_sim;
+typedef struct s_table	t_table;
 
 typedef enum e_policy
 {
@@ -48,7 +48,7 @@ typedef struct s_dongle
 
 typedef struct s_coder
 {
-	t_sim		*sim;
+	t_table		*table;
 	int			id;
 	long		last_compile_start;
 	int			compiles_done;
@@ -69,7 +69,7 @@ typedef struct s_heap
 	int			size;
 }	t_heap;
 
-typedef struct s_sim
+typedef struct s_table
 {
 	t_config		config;
 	t_dongle		*dongles;
@@ -84,7 +84,7 @@ typedef struct s_sim
 	int				finished_counter;
 	long			start_ms;
 	long			arrival_counter;
-}	t_sim;
+}	t_table;
 
 /* Functions */
 
@@ -92,13 +92,13 @@ void		heap_push(t_heap *heap, t_request req);
 t_request	heap_pop(t_heap *heap);
 t_request	*heap_peek(t_heap *heap);
 int			parse_args(int argc, char **argv, t_config *config);
-t_sim		*init_sim(t_config *config);
-void		cleanup_sim(t_sim *sim);
+t_table		*init_table(t_config *config);
+void		cleanup_table(t_table *table);
 void		arbiter_request(t_coder *coder);
 void		arbiter_release(t_coder *coder);
-void		arbiter_run(t_sim *sim, long now);
+void		arbiter_run(t_table *table, long now);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
-void		log_state(t_sim *sim, int coder_id, const char *state);
+void		log_state(t_table *table, int coder_id, const char *state);
 
 #endif

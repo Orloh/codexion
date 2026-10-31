@@ -23,7 +23,7 @@ static long	now_ms(void)
 	return (tv.tv_sec * 1000L + tv.tv_usec / 1000L);
 }
 
-static int	capture_log(t_sim *sim, int coder_id, const char *state, char *buf)
+static int	capture_log(t_table *table, int coder_id, const char *state, char *buf)
 {
 	int	fds[2];
 	int	saved;
@@ -37,7 +37,7 @@ static int	capture_log(t_sim *sim, int coder_id, const char *state, char *buf)
 	fflush(stdout);
 	(void)dup2(fds[1], 1);
 	close(fds[1]);
-	log_state(sim, coder_id, state);
+	log_state(table, coder_id, state);
 	(void)dup2(saved, 1);
 	close(saved);
 	n = (int)read(fds[0], buf, 255);
@@ -64,21 +64,21 @@ void	test_log(void)
 
 void	test_log_state(void)
 {
-	t_sim	sim;
+	t_table	table;
 	char	buf[256];
 	char	*end;
 	long	ts;
 	int		n;
 
-	memset(&sim, 0, sizeof(sim));
-	sim.start_ms = now_ms() - 100;
-	if (pthread_mutex_init(&sim.log_mutex, NULL) != 0)
+	memset(&table, 0, sizeof(table));
+	table.start_ms = now_ms() - 100;
+	if (pthread_mutex_init(&table.log_mutex, NULL) != 0)
 	{
 		CHECK(0);
 		return ;
 	}
-	n = capture_log(&sim, 7, "is compiling", buf);
-	CHECK(pthread_mutex_destroy(&sim.log_mutex) == 0);
+	n = capture_log(&table, 7, "is compiling", buf);
+	CHECK(pthread_mutex_destroy(&table.log_mutex) == 0);
 	CHECK(n > 0);
 	if (n <= 0)
 		return ;

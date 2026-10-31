@@ -35,16 +35,16 @@ static t_request	make_request(t_coder *coder, long key)
 	return (req);
 }
 
-static void	reset_dongles(t_sim *sim, long now)
+static void	reset_dongles(t_table *table, long now)
 {
 	int	i;
 
 	i = 0;
-	while (i < sim->config.number_of_coders)
+	while (i < table->config.number_of_coders)
 	{
-		sim->dongles[i].holder = -1;
-		sim->dongles[i].reserved_by = -1;
-		sim->dongles[i].available_at = now;
+		table->dongles[i].holder = -1;
+		table->dongles[i].reserved_by = -1;
+		table->dongles[i].available_at = now;
 		i++;
 	}
 }
@@ -52,134 +52,134 @@ static void	reset_dongles(t_sim *sim, long now)
 static void	test_arbiter_policy_keys(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 
 	config = make_config(1);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	sim->config.policy = FIFO;
-	sim->arrival_counter = 7;
-	sim->dongles[0].available_at = LONG_MAX;
-	arbiter_request(&sim->coders[0]);
-	CHECK(sim->heap.size == 1);
-	CHECK(sim->heap.items[0].coder == &sim->coders[0]);
-	CHECK(sim->heap.items[0].key == 7);
-	CHECK(sim->arrival_counter == 8);
-	cleanup_sim(sim);
+	table->config.policy = FIFO;
+	table->arrival_counter = 7;
+	table->dongles[0].available_at = LONG_MAX;
+	arbiter_request(&table->coders[0]);
+	CHECK(table->heap.size == 1);
+	CHECK(table->heap.items[0].coder == &table->coders[0]);
+	CHECK(table->heap.items[0].key == 7);
+	CHECK(table->arrival_counter == 8);
+	cleanup_table(table);
 	config = make_config(1);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	sim->config.policy = EDF;
-	sim->coders[0].last_compile_start = 1000;
-	sim->arrival_counter = 7;
-	sim->dongles[0].available_at = LONG_MAX;
-	arbiter_request(&sim->coders[0]);
-	CHECK(sim->heap.size == 1);
-	CHECK(sim->heap.items[0].key == 1800);
-	CHECK(sim->arrival_counter == 7);
-	cleanup_sim(sim);
+	table->config.policy = EDF;
+	table->coders[0].last_compile_start = 1000;
+	table->arrival_counter = 7;
+	table->dongles[0].available_at = LONG_MAX;
+	arbiter_request(&table->coders[0]);
+	CHECK(table->heap.size == 1);
+	CHECK(table->heap.items[0].key == 1800);
+	CHECK(table->arrival_counter == 7);
+	cleanup_table(table);
 }
 
 static void	test_arbiter_grant_and_release(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 	long		before;
 
 	config = make_config(1);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	arbiter_request(&sim->coders[0]);
-	CHECK(sim->heap.size == 0);
-	CHECK(sim->dongles[0].holder == 1);
-	CHECK(sim->dongles[0].reserved_by == -1);
+	arbiter_request(&table->coders[0]);
+	CHECK(table->heap.size == 0);
+	CHECK(table->dongles[0].holder == 1);
+	CHECK(table->dongles[0].reserved_by == -1);
 	before = now_ms();
-	arbiter_release(&sim->coders[0]);
-	CHECK(sim->dongles[0].holder == -1);
-	CHECK(sim->dongles[0].available_at >= before + 50);
-	cleanup_sim(sim);
+	arbiter_release(&table->coders[0]);
+	CHECK(table->dongles[0].holder == -1);
+	CHECK(table->dongles[0].available_at >= before + 50);
+	cleanup_table(table);
 }
 
 static void	test_arbiter_disjoint(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 	long		now;
 
 	config = make_config(4);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	now = sim->start_ms + 10;
-	reset_dongles(sim, now);
-	sim->dongles[3].available_at = now + 100;
-	heap_push(&sim->heap, make_request(&sim->coders[0], 1));
-	heap_push(&sim->heap, make_request(&sim->coders[2], 2));
-	arbiter_run(sim, now);
-	CHECK(sim->dongles[1].holder == 3);
-	CHECK(sim->dongles[2].holder == 3);
-	CHECK(sim->dongles[0].holder == -1);
-	CHECK(sim->dongles[0].reserved_by == 1);
-	CHECK(sim->dongles[3].reserved_by == 1);
-	CHECK(sim->heap.size == 1);
-	CHECK(sim->heap.items[0].coder == &sim->coders[0]);
-	cleanup_sim(sim);
+	now = table->start_ms + 10;
+	reset_dongles(table, now);
+	table->dongles[3].available_at = now + 100;
+	heap_push(&table->heap, make_request(&table->coders[0], 1));
+	heap_push(&table->heap, make_request(&table->coders[2], 2));
+	arbiter_run(table, now);
+	CHECK(table->dongles[1].holder == 3);
+	CHECK(table->dongles[2].holder == 3);
+	CHECK(table->dongles[0].holder == -1);
+	CHECK(table->dongles[0].reserved_by == 1);
+	CHECK(table->dongles[3].reserved_by == 1);
+	CHECK(table->heap.size == 1);
+	CHECK(table->heap.items[0].coder == &table->coders[0]);
+	cleanup_table(table);
 }
 
 static void	test_arbiter_shared_reserved(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 	long		now;
 
 	config = make_config(4);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	now = sim->start_ms + 10;
-	reset_dongles(sim, now);
-	sim->dongles[3].available_at = now + 100;
-	heap_push(&sim->heap, make_request(&sim->coders[0], 1));
-	heap_push(&sim->heap, make_request(&sim->coders[1], 2));
-	arbiter_run(sim, now);
-	CHECK(sim->dongles[0].holder == -1);
-	CHECK(sim->dongles[0].reserved_by == 1);
-	CHECK(sim->dongles[1].reserved_by == 2);
-	CHECK(sim->dongles[3].reserved_by == 1);
-	CHECK(sim->heap.size == 2);
-	cleanup_sim(sim);
+	now = table->start_ms + 10;
+	reset_dongles(table, now);
+	table->dongles[3].available_at = now + 100;
+	heap_push(&table->heap, make_request(&table->coders[0], 1));
+	heap_push(&table->heap, make_request(&table->coders[1], 2));
+	arbiter_run(table, now);
+	CHECK(table->dongles[0].holder == -1);
+	CHECK(table->dongles[0].reserved_by == 1);
+	CHECK(table->dongles[1].reserved_by == 2);
+	CHECK(table->dongles[3].reserved_by == 1);
+	CHECK(table->heap.size == 2);
+	cleanup_table(table);
 }
 
 static void	test_arbiter_cooldown(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 	long		now;
 
 	config = make_config(1);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	now = sim->start_ms + 10;
-	sim->dongles[0].available_at = now + 100;
-	heap_push(&sim->heap, make_request(&sim->coders[0], 1));
-	arbiter_run(sim, now);
-	CHECK(sim->dongles[0].holder == -1);
-	CHECK(sim->dongles[0].reserved_by == 1);
-	CHECK(sim->heap.size == 1);
-	arbiter_run(sim, now + 100);
-	CHECK(sim->dongles[0].holder == 1);
-	CHECK(sim->heap.size == 0);
-	cleanup_sim(sim);
+	now = table->start_ms + 10;
+	table->dongles[0].available_at = now + 100;
+	heap_push(&table->heap, make_request(&table->coders[0], 1));
+	arbiter_run(table, now);
+	CHECK(table->dongles[0].holder == -1);
+	CHECK(table->dongles[0].reserved_by == 1);
+	CHECK(table->heap.size == 1);
+	arbiter_run(table, now + 100);
+	CHECK(table->dongles[0].holder == 1);
+	CHECK(table->heap.size == 0);
+	cleanup_table(table);
 }
 
 void	test_arbiter(void)

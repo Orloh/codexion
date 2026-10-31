@@ -19,58 +19,58 @@ static t_config	make_config(int number_of_coders)
 void	test_init(void)
 {
 	t_config	config;
-	t_sim		*sim;
+	t_table		*table;
 	int			i;
 
 	config = make_config(1);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
-	CHECK(sim->config.number_of_coders == 1);
-	CHECK(sim->config.time_to_burnout == 800);
-	CHECK(sim->config.policy == EDF);
-	CHECK(sim->dongles != NULL);
-	CHECK(sim->coders != NULL);
-	CHECK(sim->heap.items != NULL);
-	CHECK(sim->scratch != NULL);
-	CHECK(sim->heap.size == 0);
-	CHECK(sim->stop == false);
-	CHECK(sim->finished_counter == 0);
-	CHECK(sim->arrival_counter == 0);
-	CHECK(sim->dongles[0].id == 0);
-	CHECK(sim->dongles[0].available_at == sim->start_ms);
-	CHECK(sim->dongles[0].holder == -1);
-	CHECK(sim->dongles[0].reserved_by == -1);
-	CHECK(sim->coders[0].sim == sim);
-	CHECK(sim->coders[0].id == 1);
-	CHECK(sim->coders[0].last_compile_start == sim->start_ms);
-	CHECK(sim->coders[0].compiles_done == 0);
-	CHECK(sim->coders[0].finished == false);
-	CHECK(sim->coders[0].left == &sim->dongles[0]);
-	CHECK(sim->coders[0].right == &sim->dongles[0]);
-	cleanup_sim(sim);
+	CHECK(table->config.number_of_coders == 1);
+	CHECK(table->config.time_to_burnout == 800);
+	CHECK(table->config.policy == EDF);
+	CHECK(table->dongles != NULL);
+	CHECK(table->coders != NULL);
+	CHECK(table->heap.items != NULL);
+	CHECK(table->scratch != NULL);
+	CHECK(table->heap.size == 0);
+	CHECK(table->stop == false);
+	CHECK(table->finished_counter == 0);
+	CHECK(table->arrival_counter == 0);
+	CHECK(table->dongles[0].id == 0);
+	CHECK(table->dongles[0].available_at == table->start_ms);
+	CHECK(table->dongles[0].holder == -1);
+	CHECK(table->dongles[0].reserved_by == -1);
+	CHECK(table->coders[0].table == table);
+	CHECK(table->coders[0].id == 1);
+	CHECK(table->coders[0].last_compile_start == table->start_ms);
+	CHECK(table->coders[0].compiles_done == 0);
+	CHECK(table->coders[0].finished == false);
+	CHECK(table->coders[0].left == &table->dongles[0]);
+	CHECK(table->coders[0].right == &table->dongles[0]);
+	cleanup_table(table);
 	config = make_config(4);
-	sim = init_sim(&config);
-	CHECK(sim != NULL);
-	if (!sim)
+	table = init_table(&config);
+	CHECK(table != NULL);
+	if (!table)
 		return ;
 	i = 0;
 	while (i < 4)
 	{
-		CHECK(sim->dongles[i].id == i);
-		CHECK(sim->dongles[i].available_at == sim->start_ms);
-		CHECK(sim->dongles[i].holder == -1);
-		CHECK(sim->dongles[i].reserved_by == -1);
-		CHECK(sim->coders[i].sim == sim);
-		CHECK(sim->coders[i].id == i + 1);
-		CHECK(sim->coders[i].last_compile_start == sim->start_ms);
-		CHECK(sim->coders[i].compiles_done == 0);
-		CHECK(sim->coders[i].finished == false);
-		CHECK(sim->coders[i].left == &sim->dongles[(i + 3) % 4]);
-		CHECK(sim->coders[i].right == &sim->dongles[i]);
+		CHECK(table->dongles[i].id == i);
+		CHECK(table->dongles[i].available_at == table->start_ms);
+		CHECK(table->dongles[i].holder == -1);
+		CHECK(table->dongles[i].reserved_by == -1);
+		CHECK(table->coders[i].table == table);
+		CHECK(table->coders[i].id == i + 1);
+		CHECK(table->coders[i].last_compile_start == table->start_ms);
+		CHECK(table->coders[i].compiles_done == 0);
+		CHECK(table->coders[i].finished == false);
+		CHECK(table->coders[i].left == &table->dongles[(i + 3) % 4]);
+		CHECK(table->coders[i].right == &table->dongles[i]);
 		i++;
 	}
-	cleanup_sim(sim);
-	cleanup_sim(NULL);
+	cleanup_table(table);
+	cleanup_table(NULL);
 }

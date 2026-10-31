@@ -16,7 +16,7 @@ Implemented:
 - `src/init.c`: simulation/array allocation, sync-object init, dongle/coder
   table setup, start timestamp and partial-init cleanup.
 - `src/cleanup.c`: destroys sync objects and frees `scratch`, heap, coders,
-  dongles and `sim`.
+  dongles and `table`.
 - `src/arbiter.c`: reservation-aware grants, FIFO/EDF key snapshots, cooldown
   release, scratch-based priority pass.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
@@ -46,8 +46,8 @@ Implementation roadmap (suggested build order; full build still needs step 3):
 - **Norm compliance**: functions ≤ 25 lines, ≤ 4 parameters, ≤ 5 functions per
   file. C89 style (declarations at top of blocks). Use `static` for file-local
   helpers, include guards, no libft.
-- **No global variables**: allocate one `t_sim` in `main` and pass pointers
-  (`&sim->coders[i]` or `&sim`) to threads.
+- **No global variables**: allocate one `t_table` in `main` and pass pointers
+  (`&table->coders[i]` or `&table`) to threads.
 - **Mutex separation**:
   - `table_mutex` guards shared simulation state (dongles, reservations, heap,
     scratch, stop flag, counters).
@@ -66,7 +66,7 @@ Implementation roadmap (suggested build order; full build still needs step 3):
 - **Arbiter**: reservation-aware. A blocked request reserves its dongles
   (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
   disjoint pairs may still run. `arbiter_run` drains the heap into
-  `sim->scratch` to process requests in priority order and broadcasts
+  `table->scratch` to process requests in priority order and broadcasts
   `dongle_cond` after each pass. `arbiter_request`, `arbiter_release` and
   `arbiter_run` assume `table_mutex` is already held; they do not lock it.
 - **Condvars**: `stop_cond` for phase waits, `dongle_cond` for grant/cooldown

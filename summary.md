@@ -259,7 +259,7 @@ When a coder **releases** after compiling, still under the mutex:
 
 `arbiter_run` (called under `table_mutex`):
 1. Clear every `dongle.reserved_by` to `-1`.
-2. Pop all queued requests into `sim->scratch`; this yields them in priority
+2. Pop all queued requests into `table->scratch`; this yields them in priority
    order.
 3. Walk `scratch` from highest to lowest priority:
    - if both unique dongles are grantable and neither is reserved, grant both
@@ -418,7 +418,7 @@ No file-scope variables. `main` allocates **one shared simulation struct** (the
 "table") and each thread receives a pointer into it. Struct sketch:
 
 ```c
-typedef struct s_sim t_sim;            /* forward declaration */
+typedef struct s_table t_table;          /* forward declaration */
 
 typedef struct s_config {
     int   number_of_coders;
@@ -439,11 +439,11 @@ typedef struct s_dongle {
 } t_dongle;
 
 typedef struct s_coder {
-    t_sim    *sim;                     /* back-pointer to shared state */
+    t_table  *table;                   /* back-pointer to shared state */
     int       id;                      /* 1 .. number_of_coders */
     long      last_compile_start;      /* anchors the burnout deadline */
     int       compiles_done;
-    int       finished;                /* whole sim done; monitor skips it */
+    int       finished;                /* whole simulation done; monitor skips */
     t_dongle *left;
     t_dongle *right;
 } t_coder;
@@ -458,7 +458,7 @@ typedef struct s_heap {
     int        size;
 } t_heap;
 
-typedef struct s_sim {
+typedef struct s_table {
     t_config        config;
     t_dongle       *dongles;           /* number_of_coders entries */
     t_coder        *coders;            /* number_of_coders entries */
@@ -472,13 +472,13 @@ typedef struct s_sim {
     int             finished_counter;
     long            start_ms;
     long            arrival_counter;   /* monotonic, for FIFO keys */
-} t_sim;
+} t_table;
 ```
 
 ### Notes
 
 - **`config` is immutable** parsed input; `start_ms` and the arrival counter are
-  **runtime state** and live in `t_sim`, not in `config`.
+  **runtime state** and live in `t_table`, not in `config`.
 - **`dongle`**: `holder == -1` means free; grantable = `holder == -1 &&
   now >= available_at && reserved_by == -1`.
 - **`dongle.reserved_by`** is transient: it is reset at the start of every
@@ -497,14 +497,14 @@ typedef struct s_sim {
 
 ### Thread argument (Option B)
 
-Each thread receives `&sim->coders[i]` (a stable address in the coder array) and
-casts it to `t_coder *`; from `self->sim` it reaches all shared state. No
+Each thread receives `&table->coders[i]` (a stable address in the coder array) and
+casts it to `t_coder *`; from `self->table` it reaches all shared state. No
 per-thread heap allocation is needed. The circular dependency (table ↔ coder) is
-resolved by the single forward declaration `typedef struct s_sim t_sim;`.
+resolved by the single forward declaration `typedef struct s_table t_table;`.
 
 ### Ownership
 
-`main` allocates `sim`, `dongles[]`, `coders[]`, the heap array and the scratch
+`main` allocates `table`, `dongles[]`, `coders[]`, the heap array and the scratch
 array, initializes the mutexes and both condition variables, creates the coder +
 monitor threads, `pthread_join`s them, then **destroys** the mutexes/condvars and
 **frees** all allocations. No other thread allocates or frees.
@@ -587,7 +587,7 @@ section; the older "stop at the first blocked root" behavior is **not** used.
      length-bounded) before `atoi`;
    - `strcmp` for the scheduler (`fifo`/`edf`);
    - a final `valid_config` enforces rules (e.g. `number_of_coders >= 1`).
-3. **Allocate `sim`**, copy `config` in, allocate `dongles[]`, `coders[]`,
+3. **Allocate `table`**, copy `config` in, allocate `dongles[]`, `coders[]`,
    `heap.items` and `scratch` (both capacity `number_of_coders`).
 4. **Initialize** `table_mutex`, `log_mutex`, `stop_cond` and `dongle_cond`
    (`pthread_mutex_init`, `pthread_cond_init`).
@@ -599,8 +599,8 @@ section; the older "stop at the first blocked root" behavior is **not** used.
    ```
 7. **Init each coder**: `compiles_done = 0`, `finished = 0`,
    `last_compile_start = start_ms` (first deadline = `start_ms + time_to_burnout`).
-8. **Create threads**: monitor first (arg = `&sim`), then coders in a `for` loop
-   (arg = `&sim->coders[i]`, per Option B). A `created` counter tracks how many
+8. **Create threads**: monitor first (arg = `&table`), then coders in a `for` loop
+   (arg = `&table->coders[i]`, per Option B). A `created` counter tracks how many
    succeeded.
 9. **Join** all created threads (monitor + coders) in a loop.
 10. **Cleanup** (see below) and `return (0)`.
@@ -619,7 +619,7 @@ No special cases; the modulo handles the wrap (coder `0`'s left = dongle `N-1`).
 
 Only after all joins: `pthread_mutex_destroy` (`table_mutex`, `log_mutex`),
 `pthread_cond_destroy` (`stop_cond`, `dongle_cond`), then `free(scratch)`,
-`free(heap.items)`, `free(coders)`, `free(dongles)`, `free(sim)`. Destroying a
+`free(heap.items)`, `free(coders)`, `free(dongles)`, `free(table)`. Destroying a
 mutex/condvar that is still locked or has waiters is undefined behavior, so
 joins always come first.
 
@@ -663,7 +663,7 @@ Binary name: **`codexion`**.
 
 - Functions ≤ 25 lines, ≤ 4 parameters, ≤ 5 functions per file.
 - C89-style: declarations at the top of a block.
-- **No global variables** — satisfied by the `t_sim` design.
+- **No global variables** — satisfied by the `t_table` design.
 - Headers use **include guards**.
 - File-internal helpers are **`static`**.
 - → Plan files around the 5-function/25-line limits (heap sift-up/sift-down,

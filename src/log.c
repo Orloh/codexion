@@ -55,17 +55,17 @@ int	log_format(char *buf, long timestamp, int coder_id, const char *state)
 	return (pos);
 }
 
-void	log_state(t_sim *sim, int coder_id, const char *state)
+void	log_state(t_table *table, int coder_id, const char *state)
 {
 	struct timeval	tv;
 	char			buf[128];
 	long			now;
 	int				len;
 
-	pthread_mutex_lock(&sim->log_mutex);
+	pthread_mutex_lock(&table->log_mutex);
 	(void)gettimeofday(&tv, NULL);
 	now = tv.tv_sec * 1000L + tv.tv_usec / 1000L;
-	len = log_format(buf, now - sim->start_ms, coder_id, state);
+	len = log_format(buf, now - table->start_ms, coder_id, state);
 	(void)write(1, buf, len);
-	pthread_mutex_unlock(&sim->log_mutex);
+	pthread_mutex_unlock(&table->log_mutex);
 }

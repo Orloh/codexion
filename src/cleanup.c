@@ -13,17 +13,17 @@
 #include "codexion.h"
 #include <stdlib.h>
 
-void	cleanup_sim(t_sim *sim)
+void	cleanup_table(t_table *table)
 {
-	if (!sim)
+	if (!table)
 		return ;
-	pthread_mutex_destroy(&sim->table_mutex);
-	pthread_mutex_destroy(&sim->log_mutex);
-	pthread_cond_destroy(&sim->stop_cond);
-	pthread_cond_destroy(&sim->dongle_cond);
-	free(sim->scratch);
-	free(sim->heap.items);
-	free(sim->coders);
-	free(sim->dongles);
-	free(sim);
+	pthread_mutex_destroy(&table->table_mutex);
+	pthread_mutex_destroy(&table->log_mutex);
+	pthread_cond_destroy(&table->stop_cond);
+	pthread_cond_destroy(&table->dongle_cond);
+	free(table->scratch);
+	free(table->heap.items);
+	free(table->coders);
+	free(table->dongles);
+	free(table);
 }

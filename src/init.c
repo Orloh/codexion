@@ -15,101 +15,101 @@
 #include <string.h>
 #include <sys/time.h>
 
-static int	alloc_arrays(t_sim *sim)
+static int	alloc_arrays(t_table *table)
 {
 	int	n;
 
-	n = sim->config.number_of_coders;
-	sim->dongles = malloc(n * sizeof(*sim->dongles));
-	sim->coders = malloc(n * sizeof(*sim->coders));
-	sim->heap.items = malloc(n * sizeof(*sim->heap.items));
-	sim->scratch = malloc(n * sizeof(*sim->scratch));
-	if (!sim->dongles || !sim->coders
-		|| !sim->heap.items || !sim->scratch)
+	n = table->config.number_of_coders;
+	table->dongles = malloc(n * sizeof(*table->dongles));
+	table->coders = malloc(n * sizeof(*table->coders));
+	table->heap.items = malloc(n * sizeof(*table->heap.items));
+	table->scratch = malloc(n * sizeof(*table->scratch));
+	if (!table->dongles || !table->coders
+		|| !table->heap.items || !table->scratch)
 		return (1);
 	return (0);
 }
 
-static int	init_sync(t_sim *sim)
+static int	init_sync(t_table *table)
 {
-	if (pthread_mutex_init(&sim->table_mutex, NULL) != 0)
+	if (pthread_mutex_init(&table->table_mutex, NULL) != 0)
 		return (1);
-	if (pthread_mutex_init(&sim->log_mutex, NULL) != 0)
+	if (pthread_mutex_init(&table->log_mutex, NULL) != 0)
 	{
-		pthread_mutex_destroy(&sim->table_mutex);
-		return (1);
-	}
-	if (pthread_cond_init(&sim->stop_cond, NULL) != 0)
-	{
-		pthread_mutex_destroy(&sim->log_mutex);
-		pthread_mutex_destroy(&sim->table_mutex);
+		pthread_mutex_destroy(&table->table_mutex);
 		return (1);
 	}
-	if (pthread_cond_init(&sim->dongle_cond, NULL) != 0)
+	if (pthread_cond_init(&table->stop_cond, NULL) != 0)
 	{
-		pthread_cond_destroy(&sim->stop_cond);
-		pthread_mutex_destroy(&sim->log_mutex);
-		pthread_mutex_destroy(&sim->table_mutex);
+		pthread_mutex_destroy(&table->log_mutex);
+		pthread_mutex_destroy(&table->table_mutex);
+		return (1);
+	}
+	if (pthread_cond_init(&table->dongle_cond, NULL) != 0)
+	{
+		pthread_cond_destroy(&table->stop_cond);
+		pthread_mutex_destroy(&table->log_mutex);
+		pthread_mutex_destroy(&table->table_mutex);
 		return (1);
 	}
 	return (0);
 }
 
-static void	free_sim(t_sim *sim)
+static void	free_table(t_table *table)
 {
-	free(sim->scratch);
-	free(sim->heap.items);
-	free(sim->coders);
-	free(sim->dongles);
-	free(sim);
+	free(table->scratch);
+	free(table->heap.items);
+	free(table->coders);
+	free(table->dongles);
+	free(table);
 }
 
-static void	init_table(t_sim *sim)
+static void	init_entries(t_table *table)
 {
 	int	i;
 	int	n;
 
-	n = sim->config.number_of_coders;
+	n = table->config.number_of_coders;
 	i = 0;
 	while (i < n)
 	{
-		sim->dongles[i].id = i;
-		sim->dongles[i].available_at = sim->start_ms;
-		sim->dongles[i].holder = -1;
-		sim->dongles[i].reserved_by = -1;
-		sim->coders[i].sim = sim;
-		sim->coders[i].id = i + 1;
-		sim->coders[i].last_compile_start = sim->start_ms;
-		sim->coders[i].compiles_done = 0;
-		sim->coders[i].finished = false;
-		sim->coders[i].left = &sim->dongles[(i + n - 1) % n];
-		sim->coders[i].right = &sim->dongles[i];
+		table->dongles[i].id = i;
+		table->dongles[i].available_at = table->start_ms;
+		table->dongles[i].holder = -1;
+		table->dongles[i].reserved_by = -1;
+		table->coders[i].table = table;
+		table->coders[i].id = i + 1;
+		table->coders[i].last_compile_start = table->start_ms;
+		table->coders[i].compiles_done = 0;
+		table->coders[i].finished = false;
+		table->coders[i].left = &table->dongles[(i + n - 1) % n];
+		table->coders[i].right = &table->dongles[i];
 		i++;
 	}
 }
 
-t_sim	*init_sim(t_config *config)
+t_table	*init_table(t_config *config)
 {
-	t_sim			*sim;
+	t_table			*table;
 	struct timeval	tv;
 
-	sim = malloc(sizeof(*sim));
-	if (!sim)
+	table = malloc(sizeof(*table));
+	if (!table)
 		return (NULL);
-	memset(sim, 0, sizeof(*sim));
-	sim->config = *config;
-	if (alloc_arrays(sim) != 0)
+	memset(table, 0, sizeof(*table));
+	table->config = *config;
+	if (alloc_arrays(table) != 0)
 	{
-		free_sim(sim);
+		free_table(table);
 		return (NULL);
 	}
-	if (init_sync(sim) != 0)
+	if (init_sync(table) != 0)
 	{
-		free_sim(sim);
+		free_table(table);
 		return (NULL);
 	}
 	(void)gettimeofday(&tv, NULL);
-	sim->start_ms = tv.tv_sec * 1000L + tv.tv_usec / 1000L;
-	init_table(sim);
-	return (sim);
+	table->start_ms = tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+	init_entries(table);
+	return (table);
 }
