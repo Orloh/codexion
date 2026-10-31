@@ -81,7 +81,7 @@ static void	init_table(t_sim *sim)
 		sim->coders[i].id = i + 1;
 		sim->coders[i].last_compile_start = sim->start_ms;
 		sim->coders[i].compiles_done = 0;
-		sim->coders[i].finished = 0;
+		sim->coders[i].finished = false;
 		sim->coders[i].left = &sim->dongles[(i + n - 1) % n];
 		sim->coders[i].right = &sim->dongles[i];
 		i++;

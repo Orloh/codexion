@@ -35,7 +35,7 @@ void	test_init(void)
 	CHECK(sim->heap.items != NULL);
 	CHECK(sim->scratch != NULL);
 	CHECK(sim->heap.size == 0);
-	CHECK(sim->stop == 0);
+	CHECK(sim->stop == false);
 	CHECK(sim->finished_counter == 0);
 	CHECK(sim->arrival_counter == 0);
 	CHECK(sim->dongles[0].id == 0);
@@ -46,7 +46,7 @@ void	test_init(void)
 	CHECK(sim->coders[0].id == 1);
 	CHECK(sim->coders[0].last_compile_start == sim->start_ms);
 	CHECK(sim->coders[0].compiles_done == 0);
-	CHECK(sim->coders[0].finished == 0);
+	CHECK(sim->coders[0].finished == false);
 	CHECK(sim->coders[0].left == &sim->dongles[0]);
 	CHECK(sim->coders[0].right == &sim->dongles[0]);
 	cleanup_sim(sim);
@@ -66,7 +66,7 @@ void	test_init(void)
 		CHECK(sim->coders[i].id == i + 1);
 		CHECK(sim->coders[i].last_compile_start == sim->start_ms);
 		CHECK(sim->coders[i].compiles_done == 0);
-		CHECK(sim->coders[i].finished == 0);
+		CHECK(sim->coders[i].finished == false);
 		CHECK(sim->coders[i].left == &sim->dongles[(i + 3) % 4]);
 		CHECK(sim->coders[i].right == &sim->dongles[i]);
 		i++;

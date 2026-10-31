@@ -14,6 +14,7 @@
 # define CODEXION_H
 
 # include <pthread.h>
+# include <stdbool.h>
 
 /* Data structs */
 
@@ -51,7 +52,7 @@ typedef struct s_coder
 	int			id;
 	long		last_compile_start;
 	int			compiles_done;
-	int			finished;
+	bool		finished;
 	t_dongle	*left;
 	t_dongle	*right;
 }	t_coder;
@@ -77,7 +78,7 @@ typedef struct s_sim
 	t_request		*scratch;
 	pthread_mutex_t	table_mutex;
 	pthread_mutex_t	log_mutex;
-	int				stop;
+	bool			stop;
 	pthread_cond_t	stop_cond;
 	pthread_cond_t	dongle_cond;
 	int				finished_counter;

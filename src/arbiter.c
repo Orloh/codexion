@@ -13,20 +13,20 @@
 #include "codexion.h"
 #include <sys/time.h>
 
-static int	grantable(t_coder *coder, long now)
+static bool	grantable(t_coder *coder, long now)
 {
 	if (coder->left->holder != -1 || coder->left->available_at > now
 		|| coder->left->reserved_by != -1)
-		return (0);
+		return (false);
 	if (coder->left == coder->right)
-		return (1);
+		return (true);
 	if (coder->right->holder != -1 || coder->right->available_at > now
 		|| coder->right->reserved_by != -1)
-		return (0);
-	return (1);
+		return (false);
+	return (true);
 }
 
-static void	set_pair(t_coder *coder, int grant)
+static void	set_pair(t_coder *coder, bool grant)
 {
 	if (grant)
 	{
@@ -57,10 +57,10 @@ void	arbiter_run(t_sim *sim, long now)
 	{
 		req = heap_pop(&sim->heap);
 		if (grantable(req.coder, now))
-			set_pair(req.coder, 1);
+			set_pair(req.coder, true);
 		else
 		{
-			set_pair(req.coder, 0);
+			set_pair(req.coder, false);
 			sim->scratch[i++] = req;
 		}
 	}
