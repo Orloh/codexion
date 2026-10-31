@@ -58,9 +58,11 @@ void	log_state(t_table *table, int coder_id, const char *state)
 {
 	char			buf[128];
 	int				len;
+	ssize_t			ret;
 
 	pthread_mutex_lock(&table->log_mutex);
 	len = log_format(buf, get_now_ms() - table->start_ms, coder_id, state);
-	(void)write(1, buf, len);
+	ret = write(1, buf, len);
+	(void)ret;
 	pthread_mutex_unlock(&table->log_mutex);
 }
