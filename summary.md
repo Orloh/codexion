@@ -123,31 +123,42 @@ fields keeps the monitor's snapshot atomic.
 
 ### Burnout check
 
-The monitor compares, for each **unfinished** coder:
+The monitor compares each coder that is neither finished nor already done:
 
 ```
+not finished
+compiles_done < number_of_compiles_required
 now > last_compile_start + time_to_burnout   →   burnout
 ```
 
-Finished coders are **skipped**, otherwise their frozen `last_compile_start`
-would produce a false burnout. On the first burnout the monitor logs
-`<timestamp> X burned out` (within 10 ms), sets the global `stop` flag and
-broadcasts the stop condition; it then stops checking.
+Finished coders are skipped. A coder that already reached the required compile
+count is also skipped, even if it is still in its final debug/refactor phase;
+otherwise its frozen `last_compile_start` would produce a false burnout.
+
+On the first burnout the monitor locks the table, sets `stop`, broadcasts
+`stop_cond` and `dongle_cond`, unlocks, logs `<timestamp> X burned out` within
+10 ms, and exits. It also exits without logging if `stop` is already set or if
+`finished_counter == number_of_coders`.
 
 ### Monitor loop (shape)
 
 ```
 while true:
-    lock; snapshot coders (last_compile_start, finished) + counter; unlock
-    if counter == number_of_coders: break        # all done
-    for each unfinished coder:
-        if now > last_compile_start + time_to_burnout:
-            log "X burned out"
-            lock; stop = 1
-            broadcast(stop_cond)
-            broadcast(dongle_cond)
-            unlock
-            break
+    lock
+    if stop or finished_counter == number_of_coders:
+        unlock; break
+    id = first coder where
+         not finished
+         and compiles_done < number_of_compiles_required
+         and now > last_compile_start + time_to_burnout
+    if id:
+        stop = 1
+        broadcast(stop_cond)
+        broadcast(dongle_cond)
+    unlock
+    if id:
+        log "X burned out"
+        break
     sleep a little (well under 10 ms)
 ```
 
@@ -717,7 +728,7 @@ be done by the user.
 
 ### Tools (in the `tests/` scaffolding, not the deliverable)
 
-- **Heap + parser + log + init + arbiter + coder unit tests**: plain
+- **Heap + parser + log + init + arbiter + coder + monitor unit tests**: plain
   **`assert`/CHECK** tests, no external C framework, via a dedicated
   `make test` target.
 - **Memory**: `valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1

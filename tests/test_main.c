@@ -10,6 +10,7 @@ void	test_log_state(void);
 void	test_init(void);
 void	test_arbiter(void);
 void	test_coder(void);
+void	test_monitor(void);
 
 int	main(void)
 {
@@ -20,6 +21,7 @@ int	main(void)
 	test_init();
 	test_arbiter();
 	test_coder();
+	test_monitor();
 	printf("%d/%d checks passed\n", g_total - g_failed, g_total);
 	return (g_failed != 0);
 }

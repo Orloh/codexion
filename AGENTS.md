@@ -22,22 +22,22 @@ Implemented:
   release, scratch-based priority pass.
 - `src/coder.c`: compile → debug → refactor loop, interruptible phase waits,
   dongle acquisition/release, completion and stop handling.
+- `src/monitor.c`: polling loop, burnout detection, finished-counter tracking.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
-  `tests/test_init.c` + `tests/test_arbiter.c` + `tests/test_coder.c`:
-  285/285 checks pass with `make test` (valgrind clean).
+  `tests/test_init.c` + `tests/test_arbiter.c` + `tests/test_coder.c` +
+  `tests/test_monitor.c`: 303/303 checks pass with `make test`
+  (valgrind clean).
 
 Missing (listed in `Makefile` but no file exists):
-- `src/main.c`, `src/monitor.c`.
+- `src/main.c`.
 - Therefore `make` / `make re` currently fails with
   `No rule to make target 'src/main.o'`.
 - `README.md` (required by the subject) does not exist.
 
-Implementation roadmap (suggested build order; full build still needs step 2):
-1. `src/monitor.c`: polling loop (≤ 10 ms precision), burnout detection,
-   finished-counter tracking.
-2. `src/main.c`: entry point tying init, thread creation, joining and cleanup
+Implementation roadmap (suggested build order; full build still needs step 1):
+1. `src/main.c`: entry point tying init, thread creation, joining and cleanup
    together.
-3. `README.md`: required documentation with AI-usage disclosure and concurrency
+2. `README.md`: required documentation with AI-usage disclosure and concurrency
    analysis.
 
 ## Architectural constraints & rules
@@ -83,7 +83,7 @@ Implementation roadmap (suggested build order; full build still needs step 2):
 
 - `make test` — builds `test_codexion` from `tests/*.o` + `src/heap.o` +
   `src/parse.o` + `src/log.o` + `src/init.o` + `src/cleanup.o` +
-  `src/arbiter.o` + `src/time.o` + `src/coder.o`, runs it.
+  `src/arbiter.o` + `src/time.o` + `src/coder.o` + `src/monitor.o`, runs it.
 - `make` / `make re` — full build; only works after the missing sources exist.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.
