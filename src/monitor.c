@@ -39,21 +39,21 @@ static int	check_state(t_table *table, long now)
 {
 	int	id;
 
-	pthread_mutex_lock(&table->table_mutex);
-	if (table->stop
-		|| table->finished_counter == table->config.number_of_coders)
+	pthread_mutex_lock(&table->shared.mutex);
+	if (table->shared.stop
+		|| table->shared.finished_counter == table->config.number_of_coders)
 	{
-		pthread_mutex_unlock(&table->table_mutex);
+		pthread_mutex_unlock(&table->shared.mutex);
 		return (-1);
 	}
 	id = find_burned(table, now);
 	if (id != 0)
 	{
-		table->stop = 1;
-		pthread_cond_broadcast(&table->stop_cond);
-		pthread_cond_broadcast(&table->dongle_cond);
+		table->shared.stop = 1;
+		pthread_cond_broadcast(&table->shared.stop_cond);
+		pthread_cond_broadcast(&table->shared.dongle_cond);
 	}
-	pthread_mutex_unlock(&table->table_mutex);
+	pthread_mutex_unlock(&table->shared.mutex);
 	return (id);
 }
 

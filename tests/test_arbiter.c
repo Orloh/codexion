@@ -51,13 +51,13 @@ static void	test_arbiter_policy_keys(void)
 	if (!table)
 		return ;
 	table->config.policy = FIFO;
-	table->arrival_counter = 7;
+	table->shared.arrival_counter = 7;
 	table->dongles[0].available_at = LONG_MAX;
 	arbiter_request(&table->coders[0]);
-	CHECK(table->heap.size == 1);
-	CHECK(table->heap.items[0].coder == &table->coders[0]);
-	CHECK(table->heap.items[0].key == 7);
-	CHECK(table->arrival_counter == 8);
+	CHECK(table->shared.heap.size == 1);
+	CHECK(table->shared.heap.items[0].coder == &table->coders[0]);
+	CHECK(table->shared.heap.items[0].key == 7);
+	CHECK(table->shared.arrival_counter == 8);
 	cleanup_table(table);
 	config = make_config(1);
 	table = init_table(&config);
@@ -66,12 +66,12 @@ static void	test_arbiter_policy_keys(void)
 		return ;
 	table->config.policy = EDF;
 	table->coders[0].last_compile_start = 1000;
-	table->arrival_counter = 7;
+	table->shared.arrival_counter = 7;
 	table->dongles[0].available_at = LONG_MAX;
 	arbiter_request(&table->coders[0]);
-	CHECK(table->heap.size == 1);
-	CHECK(table->heap.items[0].key == 1800);
-	CHECK(table->arrival_counter == 7);
+	CHECK(table->shared.heap.size == 1);
+	CHECK(table->shared.heap.items[0].key == 1800);
+	CHECK(table->shared.arrival_counter == 7);
 	cleanup_table(table);
 }
 
@@ -87,7 +87,7 @@ static void	test_arbiter_grant_and_release(void)
 	if (!table)
 		return ;
 	arbiter_request(&table->coders[0]);
-	CHECK(table->heap.size == 0);
+	CHECK(table->shared.heap.size == 0);
 	CHECK(table->dongles[0].holder == 1);
 	CHECK(table->dongles[0].reserved_by == -1);
 	before = get_now_ms();
@@ -108,19 +108,19 @@ static void	test_arbiter_disjoint(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	now = table->start_ms + 10;
+	now = table->shared.start_ms + 10;
 	reset_dongles(table, now);
 	table->dongles[3].available_at = now + 100;
-	heap_push(&table->heap, make_request(&table->coders[0], 1));
-	heap_push(&table->heap, make_request(&table->coders[2], 2));
+	heap_push(&table->shared.heap, make_request(&table->coders[0], 1));
+	heap_push(&table->shared.heap, make_request(&table->coders[2], 2));
 	arbiter_run(table, now);
 	CHECK(table->dongles[1].holder == 3);
 	CHECK(table->dongles[2].holder == 3);
 	CHECK(table->dongles[0].holder == -1);
 	CHECK(table->dongles[0].reserved_by == 1);
 	CHECK(table->dongles[3].reserved_by == 1);
-	CHECK(table->heap.size == 1);
-	CHECK(table->heap.items[0].coder == &table->coders[0]);
+	CHECK(table->shared.heap.size == 1);
+	CHECK(table->shared.heap.items[0].coder == &table->coders[0]);
 	cleanup_table(table);
 }
 
@@ -135,17 +135,17 @@ static void	test_arbiter_shared_reserved(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	now = table->start_ms + 10;
+	now = table->shared.start_ms + 10;
 	reset_dongles(table, now);
 	table->dongles[3].available_at = now + 100;
-	heap_push(&table->heap, make_request(&table->coders[0], 1));
-	heap_push(&table->heap, make_request(&table->coders[1], 2));
+	heap_push(&table->shared.heap, make_request(&table->coders[0], 1));
+	heap_push(&table->shared.heap, make_request(&table->coders[1], 2));
 	arbiter_run(table, now);
 	CHECK(table->dongles[0].holder == -1);
 	CHECK(table->dongles[0].reserved_by == 1);
 	CHECK(table->dongles[1].reserved_by == 2);
 	CHECK(table->dongles[3].reserved_by == 1);
-	CHECK(table->heap.size == 2);
+	CHECK(table->shared.heap.size == 2);
 	cleanup_table(table);
 }
 
@@ -160,16 +160,16 @@ static void	test_arbiter_cooldown(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	now = table->start_ms + 10;
+	now = table->shared.start_ms + 10;
 	table->dongles[0].available_at = now + 100;
-	heap_push(&table->heap, make_request(&table->coders[0], 1));
+	heap_push(&table->shared.heap, make_request(&table->coders[0], 1));
 	arbiter_run(table, now);
 	CHECK(table->dongles[0].holder == -1);
 	CHECK(table->dongles[0].reserved_by == 1);
-	CHECK(table->heap.size == 1);
+	CHECK(table->shared.heap.size == 1);
 	arbiter_run(table, now + 100);
 	CHECK(table->dongles[0].holder == 1);
-	CHECK(table->heap.size == 0);
+	CHECK(table->shared.heap.size == 0);
 	cleanup_table(table);
 }
 

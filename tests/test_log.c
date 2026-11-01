@@ -62,7 +62,7 @@ void	test_log_state(void)
 	int		n;
 
 	memset(&table, 0, sizeof(table));
-	table.start_ms = get_now_ms() - 100;
+	table.shared.start_ms = get_now_ms() - 100;
 	if (pthread_mutex_init(&table.log_mutex, NULL) != 0)
 	{
 		CHECK(0);

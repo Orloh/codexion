@@ -54,18 +54,18 @@ void	arbiter_run(t_table *table, long now)
 	i = table->config.number_of_coders;
 	while (i > 0)
 		table->dongles[--i].reserved_by = -1;
-	while (table->heap.size > 0)
+	while (table->shared.heap.size > 0)
 	{
-		req = heap_pop(&table->heap);
+		req = heap_pop(&table->shared.heap);
 		if (set_pair(req.coder, grantable(req.coder, now)))
 			granted = 1;
 		else
-			table->scratch[i++] = req;
+			table->shared.scratch[i++] = req;
 	}
 	while (i > 0)
-		heap_push(&table->heap, table->scratch[--i]);
+		heap_push(&table->shared.heap, table->shared.scratch[--i]);
 	if (granted)
-		pthread_cond_broadcast(&table->dongle_cond);
+		pthread_cond_broadcast(&table->shared.dongle_cond);
 }
 
 void	arbiter_request(t_coder *coder)
@@ -74,11 +74,11 @@ void	arbiter_request(t_coder *coder)
 
 	req.coder = coder;
 	if (coder->table->config.policy == FIFO)
-		req.key = coder->table->arrival_counter++;
+		req.key = coder->table->shared.arrival_counter++;
 	else
 		req.key = coder->last_compile_start
 			+ coder->table->config.time_to_burnout;
-	heap_push(&coder->table->heap, req);
+	heap_push(&coder->table->shared.heap, req);
 	arbiter_run(coder->table, get_now_ms());
 }
 
@@ -96,5 +96,5 @@ void	arbiter_release(t_coder *coder)
 			+ coder->table->config.dongle_cooldown;
 	}
 	arbiter_run(coder->table, now);
-	pthread_cond_broadcast(&coder->table->dongle_cond);
+	pthread_cond_broadcast(&coder->table->shared.dongle_cond);
 }
