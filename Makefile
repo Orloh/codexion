@@ -12,6 +12,7 @@ SRCS		= $(SRCDIR)/main.c \
 			  $(SRCDIR)/parse.c \
 			  $(SRCDIR)/heap.c \
 			  $(SRCDIR)/arbiter.c \
+			  $(SRCDIR)/dongle_pair.c \
 			  $(SRCDIR)/coder.c \
 			  $(SRCDIR)/monitor.c \
 			  $(SRCDIR)/log.c \
@@ -26,11 +27,12 @@ TEST_SRCS	= $(TESTDIR)/test_main.c \
 			  $(TESTDIR)/test_init.c \
 			  $(TESTDIR)/test_arbiter.c \
 			  $(TESTDIR)/test_coder.c \
-			  $(TESTDIR)/test_monitor.c
+			  $(TESTDIR)/test_monitor.c \
+			  $(TESTDIR)/test_dongle_pair.c
 TEST_OBJS	= $(TEST_SRCS:.c=.o) $(SRCDIR)/heap.o $(SRCDIR)/parse.o \
 			  $(SRCDIR)/log.o $(SRCDIR)/init.o $(SRCDIR)/cleanup.o \
 			  $(SRCDIR)/arbiter.o $(SRCDIR)/time.o $(SRCDIR)/coder.o \
-			  $(SRCDIR)/monitor.o
+			  $(SRCDIR)/monitor.o $(SRCDIR)/dongle_pair.o
 TEST_BIN	= test_codexion
 
 all: $(NAME)
@@ -48,6 +50,9 @@ test: $(TEST_BIN)
 test-integration: $(NAME)
 	python3 tests/test_integration.py ./$(NAME)
 
+test-scenarios: $(NAME)
+	bash tests/test_scenarios.sh ./$(NAME)
+
 $(TEST_BIN): $(TEST_OBJS)
 	$(CC) $(CFLAGS) $(TEST_OBJS) -o $(TEST_BIN)
 
@@ -62,4 +67,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re test test-integration
+.PHONY: all clean fclean re test test-integration test-scenarios

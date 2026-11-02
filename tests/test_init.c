@@ -32,19 +32,21 @@ void	test_init(void)
 	CHECK(table->config.policy == EDF);
 	CHECK(table->dongles != NULL);
 	CHECK(table->coders != NULL);
-	CHECK(table->heap.items != NULL);
-	CHECK(table->scratch != NULL);
-	CHECK(table->heap.size == 0);
-	CHECK(table->stop == 0);
-	CHECK(table->finished_counter == 0);
-	CHECK(table->arrival_counter == 0);
+	CHECK(table->shared.heap.items != NULL);
+	CHECK(table->shared.scratch != NULL);
+	CHECK(table->shared.heap.size == 0);
+	CHECK(table->shared.stop == 0);
+	CHECK(table->shared.finished_counter == 0);
+	CHECK(table->shared.arrival_counter == 0);
+	CHECK(table->dongles_ready == 1);
+	CHECK(pthread_mutex_lock(&table->dongles[0].mutex) == 0);
+	CHECK(pthread_mutex_unlock(&table->dongles[0].mutex) == 0);
 	CHECK(table->dongles[0].id == 0);
-	CHECK(table->dongles[0].available_at == table->start_ms);
+	CHECK(table->dongles[0].available_at == table->shared.start_ms);
 	CHECK(table->dongles[0].holder == -1);
-	CHECK(table->dongles[0].reserved_by == -1);
 	CHECK(table->coders[0].table == table);
 	CHECK(table->coders[0].id == 1);
-	CHECK(table->coders[0].last_compile_start == table->start_ms);
+	CHECK(table->coders[0].last_compile_start == table->shared.start_ms);
 	CHECK(table->coders[0].compiles_done == 0);
 	CHECK(table->coders[0].finished == 0);
 	CHECK(table->coders[0].left == &table->dongles[0]);
@@ -55,16 +57,18 @@ void	test_init(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
+	CHECK(table->dongles_ready == 4);
 	i = 0;
 	while (i < 4)
 	{
+		CHECK(pthread_mutex_lock(&table->dongles[i].mutex) == 0);
+		CHECK(pthread_mutex_unlock(&table->dongles[i].mutex) == 0);
 		CHECK(table->dongles[i].id == i);
-		CHECK(table->dongles[i].available_at == table->start_ms);
+		CHECK(table->dongles[i].available_at == table->shared.start_ms);
 		CHECK(table->dongles[i].holder == -1);
-		CHECK(table->dongles[i].reserved_by == -1);
 		CHECK(table->coders[i].table == table);
 		CHECK(table->coders[i].id == i + 1);
-		CHECK(table->coders[i].last_compile_start == table->start_ms);
+		CHECK(table->coders[i].last_compile_start == table->shared.start_ms);
 		CHECK(table->coders[i].compiles_done == 0);
 		CHECK(table->coders[i].finished == 0);
 		CHECK(table->coders[i].left == &table->dongles[(i + 3) % 4]);

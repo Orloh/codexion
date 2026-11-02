@@ -96,7 +96,7 @@ static void	test_coder_single_completion(void)
 	CHECK(run_coders(table) == 0);
 	CHECK(table->coders[0].finished == 1);
 	CHECK(table->coders[0].compiles_done == 1);
-	CHECK(table->finished_counter == 1);
+	CHECK(table->shared.finished_counter == 1);
 	cleanup_table(table);
 }
 
@@ -113,7 +113,7 @@ static void	test_coder_required_zero(void)
 	CHECK(run_coders(table) == 0);
 	CHECK(table->coders[0].finished == 1);
 	CHECK(table->coders[0].compiles_done == 0);
-	CHECK(table->finished_counter == 1);
+	CHECK(table->shared.finished_counter == 1);
 	cleanup_table(table);
 }
 
@@ -132,7 +132,7 @@ static void	test_coder_two_coders(void)
 	CHECK(table->coders[1].finished == 1);
 	CHECK(table->coders[0].compiles_done == 1);
 	CHECK(table->coders[1].compiles_done == 1);
-	CHECK(table->finished_counter == 2);
+	CHECK(table->shared.finished_counter == 2);
 	cleanup_table(table);
 }
 
@@ -153,7 +153,7 @@ static void	test_coder_cooldown(void)
 	elapsed = get_now_ms() - before;
 	CHECK(table->coders[0].finished == 1);
 	CHECK(table->coders[0].compiles_done == 2);
-	CHECK(table->finished_counter == 1);
+	CHECK(table->shared.finished_counter == 1);
 	CHECK(elapsed >= 50);
 	cleanup_table(table);
 }
@@ -170,16 +170,16 @@ static void	test_coder_stop_before_start(void)
 	CHECK(table != NULL);
 	if (!table)
 		return ;
-	pthread_mutex_lock(&table->table_mutex);
-	table->stop = 1;
-	pthread_mutex_unlock(&table->table_mutex);
+	pthread_mutex_lock(&table->shared.mutex);
+	table->shared.stop = 1;
+	pthread_mutex_unlock(&table->shared.mutex);
 	saved = silence_stdout();
 	if (start_coders(table, threads) == 0)
 		join_coders(table, threads);
 	restore_stdout(saved);
 	CHECK(table->coders[0].finished == 0);
 	CHECK(table->coders[0].compiles_done == 0);
-	CHECK(table->finished_counter == 0);
+	CHECK(table->shared.finished_counter == 0);
 	cleanup_table(table);
 }
 
@@ -209,23 +209,23 @@ static void	test_coder_stop_during_compile(void)
 	i = 0;
 	while (i < 500 && !seen)
 	{
-		pthread_mutex_lock(&table->table_mutex);
+		pthread_mutex_lock(&table->shared.mutex);
 		seen = (table->dongles[0].holder == 1);
-		pthread_mutex_unlock(&table->table_mutex);
+		pthread_mutex_unlock(&table->shared.mutex);
 		usleep(1000);
 		i++;
 	}
-	pthread_mutex_lock(&table->table_mutex);
-	table->stop = 1;
-	pthread_cond_broadcast(&table->stop_cond);
-	pthread_cond_broadcast(&table->dongle_cond);
-	pthread_mutex_unlock(&table->table_mutex);
+	pthread_mutex_lock(&table->shared.mutex);
+	table->shared.stop = 1;
+	pthread_cond_broadcast(&table->shared.stop_cond);
+	pthread_cond_broadcast(&table->shared.dongle_cond);
+	pthread_mutex_unlock(&table->shared.mutex);
 	join_coders(table, threads);
 	restore_stdout(saved);
 	CHECK(seen == 1);
 	CHECK(table->coders[0].finished == 0);
 	CHECK(table->coders[0].compiles_done == 0);
-	CHECK(table->finished_counter == 0);
+	CHECK(table->shared.finished_counter == 0);
 	cleanup_table(table);
 }
 

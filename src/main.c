@@ -6,7 +6,7 @@
 /*   By: orhernan <orhernan@student.42madrid.com>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/31 17:50:33 by orhernan          #+#    #+#             */
-/*   Updated: 2026/10/31 17:50:33 by orhernan         ###   ########.fr       */
+/*   Updated: 2026/11/01 21:08:27 by orhernan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -47,11 +47,11 @@ static void	join_threads(pthread_t *threads, int count)
 
 static void	stop_simulation(t_table *table)
 {
-	pthread_mutex_lock(&table->table_mutex);
-	table->stop = 1;
-	pthread_cond_broadcast(&table->stop_cond);
-	pthread_cond_broadcast(&table->dongle_cond);
-	pthread_mutex_unlock(&table->table_mutex);
+	pthread_mutex_lock(&table->shared.mutex);
+	table->shared.stop = 1;
+	pthread_cond_broadcast(&table->shared.stop_cond);
+	pthread_cond_broadcast(&table->shared.dongle_cond);
+	pthread_mutex_unlock(&table->shared.mutex);
 }
 
 static int	run_simulation(t_table *table)
