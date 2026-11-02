@@ -53,6 +53,12 @@ End-to-end integration tests:
 make test-integration
 ```
 
+Scenario matrix tests:
+
+```sh
+make test-scenarios
+```
+
 Clean build artifacts:
 
 ```sh

@@ -50,6 +50,9 @@ test: $(TEST_BIN)
 test-integration: $(NAME)
 	python3 tests/test_integration.py ./$(NAME)
 
+test-scenarios: $(NAME)
+	bash tests/test_scenarios.sh ./$(NAME)
+
 $(TEST_BIN): $(TEST_OBJS)
 	$(CC) $(CFLAGS) $(TEST_OBJS) -o $(TEST_BIN)
 
@@ -64,4 +67,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re test test-integration
+.PHONY: all clean fclean re test test-integration test-scenarios

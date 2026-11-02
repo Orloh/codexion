@@ -89,6 +89,8 @@ protects its own holder/cooldown fields.
   runs the unit suite.
 - `make test-integration` — builds `codexion` and runs
   `tests/test_integration.py`.
+- `make test-scenarios` — runs `tests/test_scenarios.sh`, a scenario matrix
+  showing clean runs and burnout cases.
 - `make` / `make re` — full build of the `codexion` executable.
 - `make clean` / `make fclean`.
 - No CI or external test framework. Tests use the `CHECK` macro in `tests/test.h`.

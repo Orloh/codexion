@@ -786,6 +786,9 @@ implementation and tests. The user understands and is responsible for all of it.
   `make test-integration`; executes the real binary and validates log formats,
   state order, dongle overlap, cooldown, phase timing, burnout precision,
   scheduler runs, zero-duration and required-zero cases.
+- **Scenario matrix**: `tests/test_scenarios.sh`, run through
+  `make test-scenarios`; demonstrates 1-coder, small-set, many-coder, and
+  several-coder clean/burnout cases with compile and burnout counts.
 
 ### Edge cases to test
 
