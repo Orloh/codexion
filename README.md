@@ -73,8 +73,9 @@ All heap blocks were freed -- no leaks are possible
 ERROR SUMMARY: 0 errors
 ```
 
-The script returns a non-zero exit status if any example or memory check fails.
-It requires `bash`, `make`, `timeout`, `grep`, and `valgrind`.
+Each PASS or FAIL line includes the exact parameters used for that run. The
+script returns a non-zero exit status if any example or memory check fails. It
+requires `bash`, `make`, `timeout`, `grep`, and `valgrind`.
 
 Clean build artifacts:
 
