@@ -44,9 +44,6 @@ dist/
 # Project binary
 /codexion
 
-# Test binary
-/test_codexion
-
 # Subject PDF
 *.pdf
 

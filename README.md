@@ -41,23 +41,40 @@ Example:
 ./codexion 5 2000 200 200 200 3 50 edf
 ```
 
-Unit tests:
+## Tests
+
+A bash test script runs a set of end-to-end examples and checks the generated
+logs. It also runs Valgrind on both a clean run and a burnout run to prove that
+the program has no memory leaks.
+
+```sh
+./tests.sh
+```
+
+The same script can be run through Make:
 
 ```sh
 make test
 ```
 
-End-to-end integration tests:
+The examples include:
 
-```sh
-make test-integration
+- one coder completing three compiles;
+- four coders using FIFO with a dongle cooldown;
+- fifty coders completing one compile each with EDF;
+- a forced burnout;
+- an invalid scheduler argument;
+- a run with zero required compiles.
+
+The Valgrind section must report:
+
+```text
+All heap blocks were freed -- no leaks are possible
+ERROR SUMMARY: 0 errors
 ```
 
-Scenario matrix tests:
-
-```sh
-make test-scenarios
-```
+The script returns a non-zero exit status if any example or memory check fails.
+It requires `bash`, `make`, `timeout`, `grep`, and `valgrind`.
 
 Clean build artifacts:
 
