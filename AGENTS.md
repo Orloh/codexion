@@ -6,34 +6,36 @@
 ## Current status & build order
 
 Implemented:
-- `include/codexion.h`: shared structs, `t_policy` (FIFO/EDF), heap/parse/log/
-  time API.
+- `include/codexion.h`: shared structs, `t_policy` (FIFO/EDF), `t_shared`,
+  `t_dongle.mutex`, `dongles_ready`, heap/parse/log/time API.
 - `src/heap.c`: min-heap `heap_push` / `heap_pop` / `heap_peek`.
 - `src/parse.c`: strict argument validation with checked manual conversion
   (no `atoi` overflow).
 - `src/log.c`: `log_format` formatter and `log_state` with one unbuffered
   `write(1, ...)` under `log_mutex`.
 - `src/time.c`: `get_now_ms()` wrapper around `gettimeofday`.
-- `src/init.c`: simulation/array allocation, sync-object init, dongle/coder
-  table setup, start timestamp and partial-init cleanup.
-- `src/cleanup.c`: destroys sync objects and frees `scratch`, heap, coders,
-  dongles and `table`.
+- `src/init.c`: shared/array/dongle-mutex initialization, `dongles_ready`
+  tracking, start timestamp and partial-init cleanup.
+- `src/cleanup.c`: destroys shared/log/dongle mutexes and frees `shared.scratch`,
+  heap, coders, dongles and `table`.
 - `src/arbiter.c`: reservation-aware grants, FIFO/EDF key snapshots, cooldown
   release, scratch-based priority pass.
+- `src/dongle_pair.c`: canonical pair locking, grant/reserve, and release helpers.
 - `src/coder.c`: compile → debug → refactor loop, interruptible phase waits,
   dongle acquisition/release, completion and stop handling.
 - `src/monitor.c`: polling loop, burnout detection, finished-counter tracking.
 - `src/main.c`: thread creation, monitor-first startup, join and cleanup.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
   `tests/test_init.c` + `tests/test_arbiter.c` + `tests/test_coder.c` +
-  `tests/test_monitor.c`: 303/303 checks pass with `make test`
-  (valgrind clean).
+  `tests/test_monitor.c` + `tests/test_dongle_pair.c`: 328/328 checks pass with
+  `make test` (valgrind and TSAN clean).
 - `tests/test_integration.py`: end-to-end log/timing/cooldown/burnout checks via
   `make test-integration`.
 - `README.md`: required 42 documentation, concurrency analysis and AI disclosure.
 
-Build status: `make` / `make re` now succeed. The unit and integration suites are
-the remaining regression checks before defense.
+Build status: `make` / `make re` now succeed. Per-dongle locking is implemented:
+`shared.mutex` protects queue/counters/coder state, and each dongle mutex
+protects its own holder/cooldown/reservation fields.
 
 ## Architectural constraints & rules
 
@@ -45,10 +47,14 @@ the remaining regression checks before defense.
 - **No global variables**: allocate one `t_table` in `main` and pass pointers
   (`&table->coders[i]` or `&table`) to threads.
 - **Mutex separation**:
-  - `table_mutex` guards shared simulation state (dongles, reservations, heap,
-    scratch, stop flag, counters).
+  - `shared.mutex` guards heap, scratch, stop flag, counters, `start_ms`,
+    `arrival_counter`, and coder state read by the monitor.
+  - Each `t_dongle.mutex` guards only that dongle's `holder`, `available_at`,
+    and `reserved_by`.
   - `log_mutex` guards stdout (`fd 1`).
-  - Never perform I/O while holding `table_mutex`.
+  - Lock order: `shared.mutex` -> dongle mutexes in ascending id order.
+  - Never hold a dongle mutex while waiting on a condition variable.
+  - Never perform I/O while holding `shared.mutex`.
 - **Clock & timing**: use `get_now_ms()` (`src/time.c`) for timestamps in
   milliseconds, not `clock_gettime`. Coder phases use `sleep_phase`, which
   builds an absolute `CLOCK_REALTIME` deadline from `get_now_ms() + duration`
@@ -63,14 +69,16 @@ the remaining regression checks before defense.
 - **Arbiter**: reservation-aware. A blocked request reserves its dongles
   (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
   disjoint pairs may still run. `arbiter_run` drains the heap into
-  `table->scratch` to process requests in priority order and broadcasts
-  `dongle_cond` when at least one request is granted. `arbiter_release`
-  broadcasts `dongle_cond` unconditionally after the pass so waiters recompute
-  cooldown/held state. `arbiter_request`, `arbiter_release` and `arbiter_run`
-  assume `table_mutex` is already held; they do not lock it.
-- **Condvars**: `stop_cond` for `sleep_phase` phase waits, `dongle_cond` for
-  grant/cooldown waits; use `pthread_cond_broadcast` (not
-  `pthread_cond_signal`).
+  `table->shared.scratch` to process requests in priority order and broadcasts
+  `shared.dongle_cond` when at least one request is granted. Pair locking,
+  grant/reserve, and release helpers live in `src/dongle_pair.c`.
+  `arbiter_request` and `arbiter_run` assume `shared.mutex` is already held;
+  `arbiter_release` locks its dongles first, unlocks them, then acquires
+  `shared.mutex` to run the arbiter and broadcast. `arbiter_release` broadcasts
+  `shared.dongle_cond` unconditionally so waiters recompute cooldown/held state.
+- **Condvars**: `shared.stop_cond` for `sleep_phase` phase waits,
+  `shared.dongle_cond` for grant/cooldown waits; use
+  `pthread_cond_broadcast` (not `pthread_cond_signal`).
 - **Dongle mapping** (0-based, circular):
   `coder[i].left = dongle[(i + N - 1) % N]`, `coder[i].right = dongle[i]`.
 - Join all threads before destroying mutexes/condvars and freeing memory.
@@ -94,9 +102,11 @@ the remaining regression checks before defense.
 ## Key edge cases to verify
 
 - **1-coder / 1-dongle case**: single dongle acquired successfully without
-  recursive-mutex or deadlock issues.
+  recursive-mutex or deadlock issues; pair helpers lock it once.
 - **Deadlock freedom**: circular table with 2+ coders using atomic both-or-none
-  requests.
+  requests and ascending dongle lock order.
+- **Disjoint concurrency**: two coders with disjoint dongle pairs can release
+  or compile without being serialized by the other pair.
 - **Burnout precision**: monitor logs `<timestamp> X burned out` within 10 ms of
   the actual deadline breach.
 - **Two exit paths**: clean completion when all coders hit
@@ -106,7 +116,10 @@ the remaining regression checks before defense.
 
 ## Repo gotchas
 
-- New `src/*.c` files must be added to `SRCS` in the `Makefile`.
+- New `src/*.c` files must be added to `SRCS` in the `Makefile`; test helpers
+  must also be added to `TEST_OBJS`.
+- `src/dongle_pair.c` holds the pair-lock helpers and is linked by both the
+  executable and the unit-test binary.
 - Build artifacts (`*.o`, `codexion`, `test_codexion`) are ignored; never commit
   them.
 - The Makefile comment calling tests "standalone" is stale: heap tests already

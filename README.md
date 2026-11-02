@@ -137,51 +137,67 @@ lock, so output order matches timestamp order.
 
 ## Thread synchronization mechanisms
 
-### `table_mutex`
+### `shared.mutex`
 
-`table_mutex` protects the shared simulation state:
+`shared.mutex` protects the global simulation state:
 
-- dongle holders, cooldown timestamps, and reservations,
 - the priority heap and scratch array,
 - coder compile counters, `last_compile_start`, and finished state,
-- the stop flag and `finished_counter`.
+- the stop flag and `finished_counter`,
+- `start_ms` and the FIFO arrival counter.
 
-No logging is performed while holding `table_mutex`.
+No logging is performed while holding `shared.mutex`.
+
+### Per-dongle mutexes
+
+Each `t_dongle` has its own `pthread_mutex_t`. That mutex protects only that
+dongle's `holder`, `available_at`, and `reserved_by`.
+
+The pair-lock helpers in `src/dongle_pair.c` lock both required dongles in
+ascending dongle-id order. This makes the both-or-none grant atomic and prevents
+circular-wait deadlocks. For `N == 1`, the single unique dongle is locked once.
+
+`arbiter_release` locks its two dongles, clears the holders, applies the
+cooldown, unlocks the dongles, and only then acquires `shared.mutex` to run the
+arbiter. This allows disjoint releases to proceed independently.
 
 ### `log_mutex`
 
-`log_mutex` protects file descriptor 1. It is separate from `table_mutex` so
+`log_mutex` protects file descriptor 1. It is separate from `shared.mutex` so
 slow output does not block the simulation and so the monitor can preserve its
 burnout precision.
 
-### `stop_cond`
+### `shared.stop_cond`
 
-`sleep_phase` uses `pthread_cond_timedwait` on `stop_cond` with an absolute
-`CLOCK_REALTIME` deadline. This makes compile, debug, and refactor waits
-interruptible: when the monitor sets `stop`, sleeping coders wake immediately
-instead of waiting for their full phase duration.
+`sleep_phase` uses `pthread_cond_timedwait` on `shared.stop_cond` with an
+absolute `CLOCK_REALTIME` deadline. This makes compile, debug, and refactor waits
+interruptible: when the monitor sets `shared.stop`, sleeping coders wake
+immediately instead of waiting for their full phase duration.
 
-### `dongle_cond`
+### `shared.dongle_cond`
 
-Dongle waiters sleep on `dongle_cond`. The arbiter broadcasts it when dongles are
-granted or released. A coder that wakes always re-checks whether both of its
-dongles now have `holder == its id`; spurious wakeups are harmless.
+Dongle waiters sleep on `shared.dongle_cond`. The arbiter broadcasts it when
+dongles are granted or released. A coder that wakes always re-checks whether
+both of its dongles now have `holder == its id`; spurious wakeups are harmless.
+
+Waiters hold `shared.mutex` for the condition wait but lock the dongles only
+briefly to inspect their state, then unlock them before waiting.
 
 Cooldown waiters use a timed wait at `available_at`. When it expires, they rerun
 `arbiter_run` because no thread releases a dongle at the moment a cooldown ends.
 
 ### Monitor coordination
 
-The monitor takes a consistent snapshot under `table_mutex`, checks deadlines,
+The monitor takes a consistent snapshot under `shared.mutex`, checks deadlines,
 and skips finished coders and coders that have already reached the required
-compile count. On burnout it sets `stop` and broadcasts `stop_cond` and
-`dongle_cond`. Coders then leave their waits and exit without incrementing
-`finished_counter`.
+compile count. On burnout it sets `shared.stop` and broadcasts
+`shared.stop_cond` and `shared.dongle_cond`. Coders then leave their waits and
+exit without incrementing `finished_counter`.
 
 ### Example race prevention
 
 Without a mutex, two coders could both observe the same dongle as free and both
 mark themselves as its holder. In Codexion, the check, reservation, and grant
-all happen while `table_mutex` is held, so only one coder can be granted a given
-dongle. The log mutex similarly prevents two threads from mixing their output
-lines.
+for a pair happen while both dongle mutexes are held, so only one coder can be
+granted a given dongle. The log mutex similarly prevents two threads from mixing
+their output lines.

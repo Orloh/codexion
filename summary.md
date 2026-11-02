@@ -118,7 +118,7 @@ protected by a mutex so the monitor gets a consistent snapshot:
 - a `finished_counter` (total coders done).
 
 The coder, right before exiting, sets its `finished` flag and increments
-`finished_counter`, both under the same mutex. Using one mutex for all three
+`finished_counter`, both under `shared.mutex`. Using one mutex for all three
 fields keeps the monitor's snapshot atomic.
 
 ### Burnout check
@@ -181,28 +181,30 @@ it hogs the CPU — around 1 ms is a good balance.
 ### Stopping the simulation
 
 - Both stop paths (burnout, or all coders finished) go through the same shared
-  `stop` flag protected by `table_mutex`. There are two condition variables:
-  `stop_cond` for interruptible phase waits and `dongle_cond` for dongle and
-  cooldown waits.
+  `shared.stop` flag protected by `shared.mutex`. There are two condition
+  variables: `shared.stop_cond` for interruptible phase waits and
+  `shared.dongle_cond` for dongle and cooldown waits.
 - The monitor can only wake threads blocked on a condition variable. On stop it
-  therefore sets `stop` and broadcasts **both** `stop_cond` and `dongle_cond`.
+  therefore sets `shared.stop` and broadcasts **both** `shared.stop_cond` and
+  `shared.dongle_cond`.
 - Chosen solution: the coder uses `sleep_phase(table, duration)`, which builds
   an absolute `CLOCK_REALTIME` deadline from `get_now_ms() + duration` and calls
-  `pthread_cond_timedwait` on `stop_cond` in a loop that re-checks `stop`.
-  `ETIMEDOUT` (from `<errno.h>`) means the full duration elapsed; after the
-  timeout it still checks `table->stop`, so a concurrent stop wins and the coder
-  exits. This gives precise timing and no `usleep` drift.
-- Dongle waiters use `dongle_cond` with the same rule: after waking they
-  re-check `stop` and exit instead of acquiring dongles.
+  `pthread_cond_timedwait` on `shared.stop_cond` in a loop that re-checks
+  `shared.stop`. `ETIMEDOUT` (from `<errno.h>`) means the full duration elapsed;
+  after the timeout it still checks `shared.stop`, so a concurrent stop wins and
+  the coder exits. This gives precise timing and no `usleep` drift.
+- Dongle waiters use `shared.dongle_cond` with the same rule: after waking they
+  re-check `shared.stop` and exit instead of acquiring dongles.
 
 ```
-lock(&table_mutex);
+lock(&shared.mutex);
 abstime = get_now_ms() + duration;
-while (!stop)
-    if (pthread_cond_timedwait(&stop_cond, &table_mutex, &abstime) == ETIMEDOUT)
+while (!shared.stop)
+    if (pthread_cond_timedwait(&shared.stop_cond, &shared.mutex, &abstime)
+        == ETIMEDOUT)
         break;                    /* full duration elapsed */
-stopped = stop;                   /* a concurrent stop wins */
-unlock(&table_mutex);
+stopped = shared.stop;            /* a concurrent stop wins */
+unlock(&shared.mutex);
 ```
 
 ### Two exit paths
@@ -219,40 +221,54 @@ unlock(&table_mutex);
 
 ### Shared state without global variables
 
-No file-scope variables. In `main`, allocate **one heap struct** holding all
-shared state and pass a pointer to every thread via `pthread_create`'s argument:
+No file-scope variables. In `main`, allocate **one `t_table`** and pass a
+pointer to every thread via `pthread_create`'s argument:
 
 - `config` (the 8 parsed arguments),
-- `dongles[]` (each: `id`, `available_at`, `holder`, `reserved_by`),
+- `shared`: heap, scratch, stop flag, `finished_counter`, `start_ms`,
+  `arrival_counter`, the shared-state mutex, and both condition variables,
+- `dongles[]` (each: `id`, `available_at`, `holder`, `reserved_by`, and its own
+  `pthread_mutex_t`),
 - `coders[]` (each: `id`, `last_compile_start`, `finished`, `compiles_done`),
-- the waiting **priority queue**,
-- a temporary **scratch array** used to process the queue in priority order,
-- `pthread_mutex_t` guarding the whole table,
-- `stop` flag + `stop_cond` / `dongle_cond`, `finished_counter`.
+- `log_mutex` guarding output,
+- `dongles_ready` tracking how many dongle mutexes were initialized.
 
-Each coder thread additionally receives its own index/id so it can find "its"
-dongles and coder slot.
+Each coder thread additionally receives its own coder slot and reaches the
+shared state through `coder->table`.
 
 ### Locking model
 
-Chosen first implementation: **one global mutex** protecting dongle states,
-cooldowns, reservations and the queue. A **single global priority queue** holds
-the waiting requests (a coder waiting for a *pair* is one request). Every
-request is enqueued; a central reservation-aware `arbiter_run` decides grants
-under the mutex. A blocked request keeps its dongles reserved, so lower requests
-sharing them wait, while lower requests with fully disjoint pairs may still be
-granted.
+There are three kinds of locks:
 
-The **arbiter is code, not a thread** — it runs under the mutex when a coder
-requests, when a coder releases, and when a cooldown timeout expires. The
+- **`shared.mutex`** protects the heap, scratch, stop flag,
+  `finished_counter`, `start_ms`, `arrival_counter`, and coder state read by
+  the monitor.
+- **Each `dongle.mutex`** protects only that dongle's `holder`,
+  `available_at`, and `reserved_by`.
+- **`log_mutex`** protects stdout (`fd 1`).
+
+Lock order is:
+
+```
+shared.mutex -> dongle mutexes in ascending dongle id order
+```
+
+Never hold a dongle mutex while waiting on a condition variable. The pair-lock
+helpers live in `src/dongle_pair.c`; they lock/unlock the two dongles in canonical
+order, check/grant/reserve a pair, and release a pair. For `N == 1`, the pair
+helpers lock the single unique dongle once.
+
+The **arbiter is code, not a thread** — it runs under `shared.mutex` when a
+coder requests, when a coder releases, and when a cooldown timeout expires. The
 **only extra thread is the monitor**.
 
 ### Request and dongle state
 
-- `dongle`: `{ id, available_at, holder, reserved_by }`; `holder == -1` means
-  free and `reserved_by == -1` means unreserved. A dongle is **grantable** for a
-  request when `holder == -1 && now >= available_at` and it is not reserved for
-  another coder.
+- `dongle`: `{ id, available_at, holder, reserved_by, mutex }`;
+  `holder == -1` means free and `reserved_by == -1` means unreserved. A dongle
+  is **grantable** for a request when `holder == -1 && now >= available_at` and
+  it is not reserved for another coder. All access happens under that dongle's
+  mutex.
 - `request`: coder id + the **priority key snapshotted at enqueue time**:
   - `fifo` → an **arrival counter** (order of request),
   - `edf`  → `last_compile_start + time_to_burnout` evaluated when the request is
@@ -260,32 +276,41 @@ requests, when a coder releases, and when a cooldown timeout expires. The
 
 ### Grant flow (atomic both-or-none, reservation-aware)
 
-A coder that wants to compile, under the table mutex:
-1. Enqueue one request with its snapshotted priority key.
-2. Run `arbiter_run`; wait on `dongle_cond` until granted or `stop`. It holds
-   nothing while waiting — no partial grab.
+A coder that wants to compile:
+1. Lock `shared.mutex`.
+2. Enqueue one request with its snapshotted priority key.
+3. Run `arbiter_run`.
+4. Wait on `dongle_cond` until granted or `stop`. It holds nothing while
+   waiting — no partial grab.
+5. On grant, re-check its holders under the dongle mutexes, set
+   `last_compile_start`, unlock `shared.mutex`, and log the dongle take(s).
 
-When a coder **releases** after compiling, still under the mutex:
-1. Mark both dongles **free**, clear `holder`, set
-   `available_at = now + dongle_cooldown`.
-2. Run `arbiter_run`; then broadcast `dongle_cond` unconditionally, because the
-   release changed dongle state even if no request was granted.
-3. Unlock.
+When a coder **releases** after compiling:
+1. Lock both dongles in ascending id order.
+2. Set `holder = -1` and `available_at = now + dongle_cooldown`.
+3. Unlock both dongles.
+4. Lock `shared.mutex`.
+5. Run `arbiter_run`.
+6. Broadcast `dongle_cond` unconditionally, because the release changed dongle
+   state even if no request was granted.
+7. Unlock `shared.mutex`.
 
-`arbiter_run` (called under `table_mutex`):
-1. Clear every `dongle.reserved_by` to `-1`.
-2. Pop all queued requests into `table->scratch`; this yields them in priority
-   order.
+`arbiter_run` (called under `shared.mutex`):
+1. Lock each dongle briefly and clear its `reserved_by`.
+2. Pop all queued requests into `table->shared.scratch`; this yields them in
+   priority order.
 3. Walk `scratch` from highest to lowest priority:
+   - lock the request's two dongles in ascending id order;
    - if both unique dongles are grantable and neither is reserved, grant both
      (set `holder`) and **do not push it back**;
    - otherwise reserve each still-unreserved dongle for this coder and push the
-     request back into the heap.
+     request back into the heap;
+   - unlock the pair.
 4. Broadcast `dongle_cond` if at least one request was granted.
 
-For `N == 1`, `left == right`: check, reserve, grant and release one unique
-dongle — never count the same pointer twice. Use `pthread_cond_broadcast` (not
-`signal`); waiters re-check whether their dongles are now held by them.
+For `N == 1`, the pair helpers treat `left` and `right` as one unique dongle —
+never count the same pointer twice. Use `pthread_cond_broadcast` (not `signal`);
+waiters re-check whether their dongles are now held by them.
 
 The grant is **pushed** by the arbiter; waiters don't poll.
 
@@ -295,10 +320,13 @@ A dongle that is held cannot be taken; the waiter waits on `dongle_cond` for a
 release/stop broadcast. A dongle that is free but still cooling cannot be
 granted either: when both needed dongles are free and cooling, use
 **`pthread_cond_timedwait` on `dongle_cond` with an absolute timeout at the
-later `available_at`**. On `ETIMEDOUT`, no thread releases at that moment, so
-the waiter must run `arbiter_run` before re-checking. Any early wake (grant,
-release, or stop) just loops. This is why the interruptible-wait primitive
-chosen for phase timing is reused here.
+later `available_at`**.
+
+The waiter holds `shared.mutex` for the wait. It locks the dongles only briefly
+to inspect `holder`, `available_at`, and `reserved_by`, then unlocks them before
+calling `pthread_cond_timedwait`. On `ETIMEDOUT`, no thread releases at that
+moment, so the waiter must run `arbiter_run` before re-checking. Any early wake
+(grant, release, or stop) just loops.
 
 ### Fairness: reservation-aware strict priority (chosen)
 
@@ -450,6 +478,7 @@ typedef struct s_dongle {
     long  available_at;                /* ms when cooldown ends (drop time) */
     int   holder;                      /* coder id, or -1 if free */
     int   reserved_by;                 /* coder id, or -1; transient */
+    pthread_mutex_t mutex;             /* protects this dongle only */
 } t_dongle;
 
 typedef struct s_coder {
@@ -472,34 +501,41 @@ typedef struct s_heap {
     int        size;
 } t_heap;
 
-typedef struct s_table {
-    t_config        config;
-    t_dongle       *dongles;           /* number_of_coders entries */
-    t_coder        *coders;            /* number_of_coders entries */
+typedef struct s_shared {
     t_heap          heap;
     t_request      *scratch;           /* capacity = number_of_coders */
-    pthread_mutex_t table_mutex;       /* guards all of the above */
-    pthread_mutex_t log_mutex;         /* guards fd 1 (see Logging) */
     int             stop;              /* set by monitor */
-    pthread_cond_t  stop_cond;         /* phase waits */
-    pthread_cond_t  dongle_cond;       /* grant/cooldown waits */
     int             finished_counter;
     long            start_ms;
     long            arrival_counter;   /* monotonic, for FIFO keys */
+    pthread_mutex_t mutex;             /* guards this struct + coder state */
+    pthread_cond_t  stop_cond;         /* phase waits */
+    pthread_cond_t  dongle_cond;       /* grant/cooldown waits */
+} t_shared;
+
+typedef struct s_table {
+    t_config        config;
+    t_shared        shared;
+    t_dongle       *dongles;           /* number_of_coders entries */
+    t_coder        *coders;            /* number_of_coders entries */
+    pthread_mutex_t log_mutex;         /* guards fd 1 (see Logging) */
+    int             dongles_ready;     /* initialized dongle mutex count */
 } t_table;
 ```
 
 ### Notes
 
 - **`config` is immutable** parsed input; `start_ms` and the arrival counter are
-  **runtime state** and live in `t_table`, not in `config`.
+  **runtime state** and live in `t_shared`, not in `config`.
 - **`dongle`**: `holder == -1` means free; grantable = `holder == -1 &&
-  now >= available_at && reserved_by == -1`.
+  now >= available_at && reserved_by == -1`. Every field is accessed under that
+  dongle's `mutex`.
 - **`dongle.reserved_by`** is transient: it is reset at the start of every
   `arbiter_run` and prevents lower-priority requests from taking a dongle that a
   higher-priority blocked request needs.
 - **`scratch`** is an array of `number_of_coders` requests used only while the
-  arbiter pops the heap in priority order; it is not part of the waiting queue.
+  arbiter pops the heap in priority order; it lives in `t_shared` and is not part
+  of the waiting queue.
 - **`coder`**: references its dongles by **pointer** (stable addresses). The
   `finished` flag means "the whole simulation is done for this coder" — not
   "finished compiling" — and tells the monitor to skip it.
@@ -508,6 +544,8 @@ typedef struct s_table {
 - **`heap`** capacity is exactly `number_of_coders` (≤ one outstanding request per
   coder). Details in the Heap section.
 - **Tie-break** equal keys by **coder id**.
+- **`dongles_ready`** counts successfully initialized dongle mutexes for safe
+  partial-init cleanup.
 
 ### Thread argument (Option B)
 
@@ -518,10 +556,12 @@ resolved by the single forward declaration `typedef struct s_table t_table;`.
 
 ### Ownership
 
-`main` allocates `table`, `dongles[]`, `coders[]`, the heap array and the scratch
-array, initializes the mutexes and both condition variables, creates the coder +
-monitor threads, `pthread_join`s them, then **destroys** the mutexes/condvars and
-**frees** all allocations. No other thread allocates or frees.
+`init_table` allocates `table`, `dongles[]`, `coders[]`, the heap array and the
+scratch array, initializes `shared.mutex`, `log_mutex`, both condition variables,
+and every dongle mutex. `main` creates the coder + monitor threads,
+`pthread_join`s them, then calls `cleanup_table`, which **destroys** all
+mutexes/condvars and **frees** all allocations. No other thread allocates or
+frees.
 
 ## Priority queue (heap)
 
@@ -572,16 +612,18 @@ Both policies use "**smaller key wins**" (min-heap):
 ### Use by the arbiter (reservation-aware)
 
 `arbiter_run` is called after an enqueue, after a release, and when a cooldown
-timeout expires. Under `table_mutex`:
+timeout expires. Under `shared.mutex`:
 
-1. Reset every `dongle.reserved_by` to `-1`.
-2. Pop all requests from the heap into `scratch`; this yields them in priority
-   order.
+1. Lock each dongle briefly and reset its `reserved_by` to `-1`.
+2. Pop all requests from the heap into `shared.scratch`; this yields them in
+   priority order.
 3. Walk `scratch` from highest to lowest priority:
+   - lock the request's two dongles in ascending id order;
    - grant a request if both its unique dongles are grantable and
      `reserved_by == -1`;
    - otherwise reserve each still-unreserved dongle for this coder and push the
-     request back into the heap.
+     request back into the heap;
+   - unlock the pair.
 4. Broadcast `dongle_cond` if at least one request was granted.
 
 A blocked high-priority request keeps its dongles reserved, so lower requests
@@ -600,23 +642,26 @@ section; the older "stop at the first blocked root" behavior is **not** used.
      length-bounded) before `atoi`;
    - `strcmp` for the scheduler (`fifo`/`edf`);
    - a final `valid_config` enforces rules (e.g. `number_of_coders >= 1`).
-3. **Allocate `table`**, copy `config` in, allocate `dongles[]`, `coders[]`,
-   `heap.items` and `scratch` (both capacity `number_of_coders`).
-4. **Initialize** `table_mutex`, `log_mutex`, `stop_cond` and `dongle_cond`
-   (`pthread_mutex_init`, `pthread_cond_init`).
-5. Record **`start_ms`** (before any thread exists — it anchors first deadlines).
-6. **Wire dongles** to coders (0-based):
+3. **Allocate `table`**, copy `config` in, initialize `shared.mutex`,
+   `log_mutex`, `stop_cond` and `dongle_cond`.
+4. **Allocate** `dongles[]`, `coders[]`, `shared.heap.items` and
+   `shared.scratch` (both capacity `number_of_coders`).
+5. **Initialize every dongle mutex**, incrementing `dongles_ready` as each
+   succeeds.
+6. Record **`start_ms`** in `shared.start_ms` (before any thread exists — it
+   anchors first deadlines).
+7. **Wire dongles** to coders (0-based):
    ```
    coder[i].left  = dongle[(i + N - 1) % N]
    coder[i].right = dongle[i]
    ```
-7. **Init each coder**: `compiles_done = 0`, `finished = 0`,
+8. **Init each coder**: `compiles_done = 0`, `finished = 0`,
    `last_compile_start = start_ms` (first deadline = `start_ms + time_to_burnout`).
-8. **Create threads**: monitor first (arg = `&table`), then coders in a `for` loop
+9. **Create threads**: monitor first (arg = `&table`), then coders in a `for` loop
    (arg = `&table->coders[i]`, per Option B). A `created` counter tracks how many
    succeeded.
-9. **Join** all created threads (monitor + coders) in a loop.
-10. **Cleanup** (see below) and `return (0)`.
+10. **Join** all created threads (monitor + coders) in a loop.
+11. **Cleanup** (see below) and `return (0)`.
 
 ### Dongle ↔ coder mapping (0-based, circular)
 
@@ -630,18 +675,20 @@ No special cases; the modulo handles the wrap (coder `0`'s left = dongle `N-1`).
 
 ### Cleanup
 
-Only after all joins: `pthread_mutex_destroy` (`table_mutex`, `log_mutex`),
-`pthread_cond_destroy` (`stop_cond`, `dongle_cond`), then `free(scratch)`,
-`free(heap.items)`, `free(coders)`, `free(dongles)`, `free(table)`. Destroying a
+Only after all joins: `pthread_mutex_destroy` (`shared.mutex`, `log_mutex`),
+`pthread_cond_destroy` (`shared.stop_cond`, `shared.dongle_cond`), destroy every
+initialized dongle mutex up to `dongles_ready`, then free `shared.scratch`,
+`shared.heap.items`, `coders`, `dongles`, and `table`. Destroying a
 mutex/condvar that is still locked or has waiters is undefined behavior, so
 joins always come first.
 
 ### Error-path unwind
 
-A failed `malloc` or `pthread_create` at the k-th thread must not leave threads
-running: set `stop = 1` and broadcast both `stop_cond` and `dongle_cond` (under
-the table mutex) so created coders exit, **join every thread that was created**,
-destroy the mutexes/condvars, free all memory, and `return (1)`.
+A failed `malloc`, dongle-mutex init, or `pthread_create` at the k-th thread
+must not leave threads running: set `shared.stop = 1` and broadcast both
+`shared.stop_cond` and `shared.dongle_cond` (under `shared.mutex`) so created
+coders exit, **join every thread that was created**, destroy all mutexes/condvars
+including initialized dongle mutexes, free all memory, and `return (1)`.
 
 ## File layout, Makefile & Norm
 
@@ -653,10 +700,13 @@ your choice"), keep the current structure:
 ```
 codexion/
 ├── Makefile
-├── src/          # *.c
+├── src/          # *.c, including dongle_pair.c pair-lock helpers
 ├── include/      # *.h
 └── ...           # README.md, summary.md
 ```
+
+`src/dongle_pair.c` contains the pair-lock helpers used by the arbiter and coder:
+canonical pair locking, pair grant/reserve, and pair release.
 
 Binary name: **`codexion`**.
 
@@ -731,6 +781,9 @@ implementation and tests. The user understands and is responsible for all of it.
 - **Heap + parser + log + init + arbiter + coder + monitor unit tests**: plain
   **`assert`/CHECK** tests, no external C framework, via a dedicated
   `make test` target.
+- **Dongle mutex tests**: verify every dongle mutex is initialized and destroyed,
+  pair locking is deadlock-free, `N == 1` locks one unique dongle once, and
+  disjoint releases can proceed independently.
 - **Memory**: `valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1
   ./codexion <args>`.
 - **Data races**: TSAN build (`-fsanitize=thread`) or `valgrind

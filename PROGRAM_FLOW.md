@@ -20,20 +20,21 @@ Invalid arguments print an error and usage message to `stderr`; `main` returns
 
 - `dongles[]`
 - `coders[]`
-- `heap.items[]`
-- `scratch[]`
+- `shared.heap.items[]`
+- `shared.scratch[]`
 
 It initializes:
 
-- `table_mutex`
+- `shared.mutex`
 - `log_mutex`
-- `stop_cond`
-- `dongle_cond`
+- `shared.stop_cond`
+- `shared.dongle_cond`
+- every `dongles[i].mutex`
 
 Then it records:
 
 ```c
-table->start_ms = get_now_ms();
+table->shared.start_ms = get_now_ms();
 ```
 
 `init_entries` initializes each dongle:
@@ -86,19 +87,24 @@ On success, all threads are joined before cleanup.
 
 ## 4. Shared synchronization state
 
-`table_mutex` protects:
+`shared.mutex` protects:
 
-- dongle `holder`, `available_at`, and `reserved_by`
 - the heap and scratch array
 - coder `last_compile_start`, `compiles_done`, and `finished`
-- `stop` and `finished_counter`
-- `arrival_counter`
+- `shared.stop` and `shared.finished_counter`
+- `shared.start_ms` and `shared.arrival_counter`
+
+Each `dongles[i].mutex` protects only that dongle's `holder`, `available_at`,
+and `reserved_by`.
+
+The pair-lock helpers in `src/dongle_pair.c` lock both required dongles in
+ascending dongle-id order. For `N == 1`, the single dongle is locked once.
 
 `log_mutex` protects output to file descriptor 1.
 
-`stop_cond` is used by coder phase waits.
+`shared.stop_cond` is used by coder phase waits.
 
-`dongle_cond` is used by coders waiting for dongles or cooldown.
+`shared.dongle_cond` is used by coders waiting for dongles or cooldown.
 
 ## 5. Coder lifecycle
 
@@ -108,7 +114,7 @@ Each coder thread runs `coder_routine` (`src/coder.c`).
 
 At the top of each iteration:
 
-1. Lock `table_mutex`.
+1. Lock `shared.mutex`.
 2. If `stop`, unlock and exit.
 3. If `compiles_done >= required`, set `finished = 1`, increment
    `finished_counter`, unlock and exit.
@@ -139,7 +145,7 @@ wait time_to_refactor
 
 `acquire_dongles`:
 
-1. Locks `table_mutex`.
+1. Locks `shared.mutex`.
 2. Checks `stop`.
 3. Calls `arbiter_request`.
 4. Waits in `wait_for_dongles`.
@@ -151,15 +157,20 @@ For `N == 1`, `left == right`, so only one take line is emitted.
 
 ### Waiting for dongles
 
-`wait_for_dongles` is called with `table_mutex` held.
+`wait_for_dongles` is called with `shared.mutex` held.
+
+It locks the two dongles briefly to inspect their holders and cooldowns, then
+unlocks them before waiting.
 
 It loops until both dongles have `holder == coder->id`, or until `stop` is set.
 
-It waits on `dongle_cond` until the later `available_at`. If that time is already
-past, it uses a one-second fallback. On `ETIMEDOUT`, it calls `arbiter_run` again.
+It waits on `shared.dongle_cond` until the later `available_at`. If that time is
+already past, it uses a one-second fallback. On `ETIMEDOUT`, it calls
+`arbiter_run` again.
 
-`arbiter_release` broadcasts `dongle_cond` unconditionally after releasing
-dongles, so waiters wake and recompute their state.
+`arbiter_release` locks its dongles, clears the holders, applies the cooldown,
+unlocks the dongles, then acquires `shared.mutex` to run the arbiter and
+broadcast `shared.dongle_cond`.
 
 ### Phase waits
 
@@ -169,12 +180,12 @@ dongles, so waiters wake and recompute their state.
 get_now_ms() + duration
 ```
 
-It uses `pthread_cond_timedwait` on `stop_cond` with `table_mutex`. If the
+It uses `pthread_cond_timedwait` on `stop_cond` with `shared.mutex`. If the
 monitor sets `stop`, the coder wakes immediately and exits.
 
 ## 6. Arbiter lifecycle
 
-The arbiter is code, not a separate thread. It runs under `table_mutex`.
+The arbiter is code, not a separate thread. It runs under `shared.mutex`.
 
 ### Request
 
@@ -233,7 +244,7 @@ The monitor runs `monitor_routine` (`src/monitor.c`).
 
 Every millisecond it calls `check_state`.
 
-`check_state` locks `table_mutex` and returns:
+`check_state` locks `shared.mutex` and returns:
 
 - `-1` if `stop` is already set or `finished_counter == N`
 - a coder id if someone burned out
@@ -283,7 +294,7 @@ It:
 
 This guarantees complete lines, no interleaving, no stdio buffering, and
 timestamp ordering matching log ordering. No logging happens while holding
-`table_mutex`.
+`shared.mutex`.
 
 ## 9. Exit paths
 
@@ -318,7 +329,7 @@ A normal compile request flows like this:
 
 ```text
 coder
-  -> locks table_mutex
+  -> locks shared.mutex
   -> arbiter_request
        -> creates request with FIFO/EDF key
        -> heap_push
@@ -329,11 +340,11 @@ coder
        -> sleeps on dongle_cond
   -> wakes when holders == coder id
   -> sets last_compile_start
-  -> unlocks table_mutex
+  -> unlocks shared.mutex
   -> logs "has taken a dongle" x1/x2
   -> logs "is compiling"
   -> sleep_phase(compile)
-  -> locks table_mutex
+  -> locks shared.mutex
   -> arbiter_release
        -> frees dongles + cooldown
        -> arbiter_run
@@ -350,7 +361,7 @@ Meanwhile, independently:
 
 ```text
 monitor
-  -> every 1 ms: lock table_mutex
+  -> every 1 ms: lock shared.mutex
   -> check finished_counter and every unfinished coder's deadline
   -> if burnout: stop = 1, broadcast stop_cond + dongle_cond, unlock
   -> log "X burned out"
