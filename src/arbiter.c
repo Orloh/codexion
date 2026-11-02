@@ -12,36 +12,18 @@
 
 #include "codexion.h"
 
-static int	grantable(t_coder *coder, long now)
+static void	clear_reservations(t_table *table)
 {
-	if (coder->left->holder != -1 || coder->left->available_at > now
-		|| coder->left->reserved_by != -1)
-		return (0);
-	if (coder->left == coder->right)
-		return (1);
-	if (coder->right->holder != -1 || coder->right->available_at > now
-		|| coder->right->reserved_by != -1)
-		return (0);
-	return (1);
-}
+	int	i;
 
-static int	set_pair(t_coder *coder, int grant)
-{
-	if (grant)
+	i = 0;
+	while (i < table->config.number_of_coders)
 	{
-		coder->left->holder = coder->id;
-		if (coder->left != coder->right)
-			coder->right->holder = coder->id;
+		pthread_mutex_lock(&table->dongles[i].mutex);
+		table->dongles[i].reserved_by = -1;
+		pthread_mutex_unlock(&table->dongles[i].mutex);
+		i++;
 	}
-	else
-	{
-		if (coder->left->reserved_by == -1)
-			coder->left->reserved_by = coder->id;
-		if (coder->left != coder->right
-			&& coder->right->reserved_by == -1)
-			coder->right->reserved_by = coder->id;
-	}
-	return (grant);
 }
 
 void	arbiter_run(t_table *table, long now)
@@ -51,13 +33,12 @@ void	arbiter_run(t_table *table, long now)
 	int			granted;
 
 	granted = 0;
-	i = table->config.number_of_coders;
-	while (i > 0)
-		table->dongles[--i].reserved_by = -1;
+	clear_reservations(table);
+	i = 0;
 	while (table->shared.heap.size > 0)
 	{
 		req = heap_pop(&table->shared.heap);
-		if (set_pair(req.coder, grantable(req.coder, now)))
+		if (arbiter_try_pair(req.coder, now))
 			granted = 1;
 		else
 			table->shared.scratch[i++] = req;
@@ -87,6 +68,7 @@ void	arbiter_release(t_coder *coder)
 	long	now;
 
 	now = get_now_ms();
+	arbiter_lock_pair(coder);
 	coder->left->holder = -1;
 	coder->left->available_at = now + coder->table->config.dongle_cooldown;
 	if (coder->left != coder->right)
@@ -95,6 +77,9 @@ void	arbiter_release(t_coder *coder)
 		coder->right->available_at = now
 			+ coder->table->config.dongle_cooldown;
 	}
+	arbiter_unlock_pair(coder);
+	pthread_mutex_lock(&coder->table->shared.mutex);
 	arbiter_run(coder->table, now);
 	pthread_cond_broadcast(&coder->table->shared.dongle_cond);
+	pthread_mutex_unlock(&coder->table->shared.mutex);
 }

@@ -11,6 +11,7 @@ void	test_init(void);
 void	test_arbiter(void);
 void	test_coder(void);
 void	test_monitor(void);
+void	test_dongle_pair(void);
 
 int	main(void)
 {
@@ -22,6 +23,7 @@ int	main(void)
 	test_arbiter();
 	test_coder();
 	test_monitor();
+	test_dongle_pair();
 	printf("%d/%d checks passed\n", g_total - g_failed, g_total);
 	return (g_failed != 0);
 }
