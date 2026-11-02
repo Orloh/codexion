@@ -59,7 +59,8 @@ protects its own holder/cooldown fields.
   milliseconds, not `clock_gettime`. Coder phases use `sleep_phase`, which
   builds an absolute `CLOCK_REALTIME` deadline from `get_now_ms() + duration`
   and `pthread_cond_timedwait`s on `stop_cond`; a concurrent `stop` wins after
-  timeout. `usleep` (microseconds) is only for the monitor polling loop.
+  timeout. After each phase wait, the coder calls `stop_requested` before logging
+  the next state. `usleep` (microseconds) is only for the monitor polling loop.
 - **Logging**: no `printf`/`sprintf`/`snprintf`. Build each line in a local
   buffer with hand-rolled integer-to-string formatting, then emit it with a
   single unbuffered `write(1, ...)` under `log_mutex`.

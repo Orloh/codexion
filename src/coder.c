@@ -85,12 +85,16 @@ static int	run_cycle(t_coder *coder)
 	log_state(table, coder->id, "is compiling");
 	if (sleep_phase(table, table->config.time_to_compile))
 		return (1);
+	if (stop_requested(table))
+		return (1);
 	pthread_mutex_lock(&table->shared.mutex);
 	coder->compiles_done++;
 	pthread_mutex_unlock(&table->shared.mutex);
 	arbiter_release(coder);
 	log_state(table, coder->id, "is debugging");
 	if (sleep_phase(table, table->config.time_to_debug))
+		return (1);
+	if (stop_requested(table))
 		return (1);
 	log_state(table, coder->id, "is refactoring");
 	return (sleep_phase(table, table->config.time_to_refactor));

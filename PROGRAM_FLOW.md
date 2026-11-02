@@ -179,8 +179,12 @@ broadcast `shared.dongle_cond`.
 get_now_ms() + duration
 ```
 
-It uses `pthread_cond_timedwait` on `stop_cond` with `shared.mutex`. If the
-monitor sets `stop`, the coder wakes immediately and exits.
+It uses `pthread_cond_timedwait` on `shared.stop_cond` with `shared.mutex`. If
+the monitor sets `stop`, the coder wakes immediately and exits.
+
+After a phase returns normally, the coder calls `stop_requested` before logging
+the next state or releasing dongles. This prevents a state transition from being
+logged after the burnout line.
 
 ## 6. Arbiter lifecycle
 

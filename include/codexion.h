@@ -107,6 +107,7 @@ void		arbiter_lock_pair(t_coder *coder);
 void		arbiter_unlock_pair(t_coder *coder);
 int			arbiter_try_pair(t_coder *coder, long now);
 int			sleep_phase(t_table *table, long duration);
+int			stop_requested(t_table *table);
 int			log_format(char *buf, long timestamp, int coder_id,
 				const char *state);
 void		log_state(t_table *table, int coder_id, const char *state);

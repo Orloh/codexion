@@ -43,3 +43,13 @@ int	sleep_phase(t_table *table, long duration)
 	pthread_mutex_unlock(&table->shared.mutex);
 	return (stopped);
 }
+
+int	stop_requested(t_table *table)
+{
+	int	stopped;
+
+	pthread_mutex_lock(&table->shared.mutex);
+	stopped = table->shared.stop;
+	pthread_mutex_unlock(&table->shared.mutex);
+	return (stopped);
+}

@@ -193,6 +193,9 @@ it hogs the CPU — around 1 ms is a good balance.
   `shared.stop`. `ETIMEDOUT` (from `<errno.h>`) means the full duration elapsed;
   after the timeout it still checks `shared.stop`, so a concurrent stop wins and
   the coder exits. This gives precise timing and no `usleep` drift.
+- After a phase wait returns normally, the coder calls `stop_requested` before
+  logging the next state or releasing dongles. This prevents a normal state
+  transition from being logged after the burnout line.
 - Dongle waiters use `shared.dongle_cond` with the same rule: after waking they
   re-check `shared.stop` and exit instead of acquiring dongles.
 

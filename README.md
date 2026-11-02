@@ -178,7 +178,9 @@ burnout precision.
 `sleep_phase` uses `pthread_cond_timedwait` on `shared.stop_cond` with an
 absolute `CLOCK_REALTIME` deadline. This makes compile, debug, and refactor waits
 interruptible: when the monitor sets `shared.stop`, sleeping coders wake
-immediately instead of waiting for their full phase duration.
+immediately instead of waiting for their full phase duration. After a phase
+returns normally, the coder checks `stop_requested` before logging the next
+state, so a burnout line is not followed by a new state transition.
 
 ### `shared.dongle_cond`
 
