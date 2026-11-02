@@ -12,8 +12,7 @@ debugging and refactoring before trying to compile again.
 
 The simulation stops when every coder has compiled the required number of times,
 or when a coder misses its burnout deadline. A separate monitor thread detects
-burnout and stops the simulation. Dongle access is controlled by a
-reservation-aware arbiter using a priority heap:
+burnout and stops the simulation. Dongle access is controlled by a work-conserving arbiter using a priority heap:
 
 - `fifo`: requests are served in arrival order.
 - `edf`: requests are served by earliest burnout deadline.
@@ -93,15 +92,16 @@ Mutual exclusion and no-preemption remain, as required by the subject.
 
 ### Starvation prevention
 
-The arbiter uses strict priority with reservations:
+The arbiter is **work-conserving**. Requests are processed in priority order:
 
-- A blocked higher-priority request reserves its needed dongles.
-- Lower-priority requests that share a reserved dongle wait.
-- Lower-priority requests with fully disjoint dongle pairs may still proceed.
+- A request that cannot be granted is requeued without reserving dongles.
+- Lower-priority requests whose pairs are currently free may still proceed.
+- This avoids a reservation convoy where one blocked request prevents every
+  other coder from running.
 
-Under feasible EDF parameters, the earliest-deadline coder is not overtaken by
-later-deadline requests for the same dongles. FIFO uses the same reservation
-rule with arrival order.
+Under feasible EDF parameters, the earliest-deadline coder is considered first
+when requests compete for the same free dongles. FIFO uses the same scan with
+arrival order.
 
 ### Cooldown handling
 
@@ -151,7 +151,7 @@ No logging is performed while holding `shared.mutex`.
 ### Per-dongle mutexes
 
 Each `t_dongle` has its own `pthread_mutex_t`. That mutex protects only that
-dongle's `holder`, `available_at`, and `reserved_by`.
+dongle's `holder` and `available_at`.
 
 The pair-lock helpers in `src/dongle_pair.c` lock both required dongles in
 ascending dongle-id order. This makes the both-or-none grant atomic and prevents
@@ -197,7 +197,7 @@ exit without incrementing `finished_counter`.
 ### Example race prevention
 
 Without a mutex, two coders could both observe the same dongle as free and both
-mark themselves as its holder. In Codexion, the check, reservation, and grant
-for a pair happen while both dongle mutexes are held, so only one coder can be
-granted a given dongle. The log mutex similarly prevents two threads from mixing
-their output lines.
+mark themselves as its holder. In Codexion, the check and grant for a pair happen
+while both dongle mutexes are held, so only one coder can be granted a given
+dongle. The log mutex similarly prevents two threads from mixing their output
+lines.

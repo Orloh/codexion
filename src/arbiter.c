@@ -12,20 +12,6 @@
 
 #include "codexion.h"
 
-static void	clear_reservations(t_table *table)
-{
-	int	i;
-
-	i = 0;
-	while (i < table->config.number_of_coders)
-	{
-		pthread_mutex_lock(&table->dongles[i].mutex);
-		table->dongles[i].reserved_by = -1;
-		pthread_mutex_unlock(&table->dongles[i].mutex);
-		i++;
-	}
-}
-
 void	arbiter_run(t_table *table, long now)
 {
 	t_request	req;
@@ -33,7 +19,6 @@ void	arbiter_run(t_table *table, long now)
 	int			granted;
 
 	granted = 0;
-	clear_reservations(table);
 	i = 0;
 	while (table->shared.heap.size > 0)
 	{

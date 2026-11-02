@@ -42,7 +42,6 @@ typedef struct s_dongle
 	int				id;
 	long			available_at;
 	int				holder;
-	int				reserved_by;
 	pthread_mutex_t	mutex;
 }	t_dongle;
 

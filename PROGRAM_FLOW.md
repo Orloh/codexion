@@ -43,7 +43,6 @@ table->shared.start_ms = get_now_ms();
 id = i;
 available_at = start_ms;
 holder = -1;
-reserved_by = -1;
 ```
 
 and each coder:
@@ -94,8 +93,8 @@ On success, all threads are joined before cleanup.
 - `shared.stop` and `shared.finished_counter`
 - `shared.start_ms` and `shared.arrival_counter`
 
-Each `dongles[i].mutex` protects only that dongle's `holder`, `available_at`,
-and `reserved_by`.
+Each `dongles[i].mutex` protects only that dongle's `holder` and
+`available_at`.
 
 The pair-lock helpers in `src/dongle_pair.c` lock both required dongles in
 ascending dongle-id order. For `N == 1`, the single dongle is locked once.
@@ -202,13 +201,11 @@ The arbiter is code, not a separate thread. It runs under `shared.mutex`.
 
 `arbiter_run`:
 
-1. Clears every dongle's `reserved_by`.
-2. Pops requests from the heap in priority order.
-3. For each request:
+1. Pops requests from the heap in priority order.
+2. For each request:
    - grants both dongles if they are grantable
-   - otherwise reserves the needed dongles and defers the request
-4. Pushes deferred requests back into the heap.
-5. Broadcasts `dongle_cond` if at least one request was granted.
+   - otherwise pushes the request back without reserving dongles
+3. Broadcasts `dongle_cond` if at least one request was granted.
 
 The heap orders requests by:
 
@@ -229,14 +226,16 @@ equal keys -> smaller coder id
 The unconditional broadcast is important because releasing dongles changes the
 state even if no request was granted.
 
-### Reservation-aware behavior
+### Work-conserving behavior
 
-A blocked higher-priority request reserves its needed dongles.
+A blocked request does not reserve dongles.
 
 A lower-priority request:
 
-- waits if it shares a reserved dongle
-- may proceed if its dongle pair is fully disjoint
+- waits if its own dongles are held or cooling
+- may proceed if its pair is currently free
+
+This avoids a reservation convoy and keeps the table live with many coders.
 
 ## 7. Monitor lifecycle
 
@@ -334,7 +333,7 @@ coder
        -> creates request with FIFO/EDF key
        -> heap_push
        -> arbiter_run
-            -> grants pair or reserves dongles
+            -> grants free pairs or requeues blocked requests
             -> broadcasts dongle_cond if a grant happened
   -> wait_for_dongles
        -> sleeps on dongle_cond
@@ -368,6 +367,5 @@ monitor
   -> exit
 ```
 
-Coders request and release resources, the arbiter grants or reserves dongles,
-the monitor watches deadlines and completion, and the logger serializes all
-visible output.
+Coders request and release resources, the arbiter grants free pairs, the monitor
+watches deadlines and completion, and the logger serializes all visible output.

@@ -81,7 +81,6 @@ static void	init_entries(t_table *table)
 		table->dongles[i].id = i;
 		table->dongles[i].available_at = table->shared.start_ms;
 		table->dongles[i].holder = -1;
-		table->dongles[i].reserved_by = -1;
 		table->coders[i].table = table;
 		table->coders[i].id = i + 1;
 		table->coders[i].last_compile_start = table->shared.start_ms;

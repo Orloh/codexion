@@ -18,16 +18,16 @@ Implemented:
   tracking, start timestamp and partial-init cleanup.
 - `src/cleanup.c`: destroys shared/log/dongle mutexes and frees `shared.scratch`,
   heap, coders, dongles and `table`.
-- `src/arbiter.c`: reservation-aware grants, FIFO/EDF key snapshots, cooldown
+- `src/arbiter.c`: work-conserving grants, FIFO/EDF key snapshots, cooldown
   release, scratch-based priority pass.
-- `src/dongle_pair.c`: canonical pair locking, grant/reserve, and release helpers.
+- `src/dongle_pair.c`: canonical pair locking, pair grant, and release helpers.
 - `src/coder.c`: compile → debug → refactor loop, interruptible phase waits,
   dongle acquisition/release, completion and stop handling.
 - `src/monitor.c`: polling loop, burnout detection, finished-counter tracking.
 - `src/main.c`: thread creation, monitor-first startup, join and cleanup.
 - `tests/test_heap.c` + `tests/test_parse.c` + `tests/test_log.c` +
   `tests/test_init.c` + `tests/test_arbiter.c` + `tests/test_coder.c` +
-  `tests/test_monitor.c` + `tests/test_dongle_pair.c`: 328/328 checks pass with
+  `tests/test_monitor.c` + `tests/test_dongle_pair.c`: 318/318 checks pass with
   `make test` (valgrind and TSAN clean).
 - `tests/test_integration.py`: end-to-end log/timing/cooldown/burnout checks via
   `make test-integration`.
@@ -35,7 +35,7 @@ Implemented:
 
 Build status: `make` / `make re` now succeed. Per-dongle locking is implemented:
 `shared.mutex` protects queue/counters/coder state, and each dongle mutex
-protects its own holder/cooldown/reservation fields.
+protects its own holder/cooldown fields.
 
 ## Architectural constraints & rules
 
@@ -49,8 +49,8 @@ protects its own holder/cooldown/reservation fields.
 - **Mutex separation**:
   - `shared.mutex` guards heap, scratch, stop flag, counters, `start_ms`,
     `arrival_counter`, and coder state read by the monitor.
-  - Each `t_dongle.mutex` guards only that dongle's `holder`, `available_at`,
-    and `reserved_by`.
+  - Each `t_dongle.mutex` guards only that dongle's `holder` and
+    `available_at`.
   - `log_mutex` guards stdout (`fd 1`).
   - Lock order: `shared.mutex` -> dongle mutexes in ascending id order.
   - Never hold a dongle mutex while waiting on a condition variable.
@@ -66,12 +66,12 @@ protects its own holder/cooldown/reservation fields.
 - **Heap**: capacity is exactly `number_of_coders`; min-heap, smaller key wins,
   ties broken by smaller coder id. FIFO key = arrival counter, EDF key =
   `last_compile_start + time_to_burnout`, snapshotted at enqueue.
-- **Arbiter**: reservation-aware. A blocked request reserves its dongles
-  (`t_dongle.reserved_by`); lower requests sharing them wait, while fully
-  disjoint pairs may still run. `arbiter_run` drains the heap into
-  `table->shared.scratch` to process requests in priority order and broadcasts
-  `shared.dongle_cond` when at least one request is granted. Pair locking,
-  grant/reserve, and release helpers live in `src/dongle_pair.c`.
+- **Arbiter**: work-conserving. Requests are processed in priority order; a
+  request that cannot be granted is requeued **without reserving dongles**, so a
+  lower request whose pair is currently free may still run. `arbiter_run` drains
+  the heap into `table->shared.scratch`, broadcasts `shared.dongle_cond` when at
+  least one request is granted, and calls `arbiter_try_pair` for each request.
+  Pair locking, grant, and release helpers live in `src/dongle_pair.c`.
   `arbiter_request` and `arbiter_run` assume `shared.mutex` is already held;
   `arbiter_release` locks its dongles first, unlocks them, then acquires
   `shared.mutex` to run the arbiter and broadcast. `arbiter_release` broadcasts

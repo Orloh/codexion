@@ -69,7 +69,7 @@ static void	test_try_pair_grant(void)
 	cleanup_table(table);
 }
 
-static void	test_try_pair_reserve(void)
+static void	test_try_pair_blocked(void)
 {
 	t_config	config;
 	t_table		*table;
@@ -82,8 +82,7 @@ static void	test_try_pair_reserve(void)
 	table->dongles[0].holder = 2;
 	CHECK(arbiter_try_pair(&table->coders[0], get_now_ms()) == 0);
 	CHECK(table->dongles[0].holder == 2);
-	CHECK(table->dongles[0].reserved_by == 1);
-	CHECK(table->dongles[1].reserved_by == 1);
+	CHECK(table->dongles[1].holder == -1);
 	cleanup_table(table);
 }
 
@@ -111,6 +110,6 @@ void	test_dongle_pair(void)
 	test_pair_lock_n1();
 	test_pair_lock_n4();
 	test_try_pair_grant();
-	test_try_pair_reserve();
+	test_try_pair_blocked();
 	test_release_pair();
 }

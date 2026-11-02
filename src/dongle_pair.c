@@ -44,33 +44,20 @@ void	arbiter_unlock_pair(t_coder *coder)
 
 static int	grantable(t_coder *coder, long now)
 {
-	if (coder->left->holder != -1 || coder->left->available_at > now
-		|| coder->left->reserved_by != -1)
+	if (coder->left->holder != -1 || coder->left->available_at > now)
 		return (0);
 	if (coder->left == coder->right)
 		return (1);
-	if (coder->right->holder != -1 || coder->right->available_at > now
-		|| coder->right->reserved_by != -1)
+	if (coder->right->holder != -1 || coder->right->available_at > now)
 		return (0);
 	return (1);
 }
 
-static void	set_pair(t_coder *coder, int grant)
+static void	set_pair(t_coder *coder)
 {
-	if (grant)
-	{
-		coder->left->holder = coder->id;
-		if (coder->left != coder->right)
-			coder->right->holder = coder->id;
-	}
-	else
-	{
-		if (coder->left->reserved_by == -1)
-			coder->left->reserved_by = coder->id;
-		if (coder->left != coder->right
-			&& coder->right->reserved_by == -1)
-			coder->right->reserved_by = coder->id;
-	}
+	coder->left->holder = coder->id;
+	if (coder->left != coder->right)
+		coder->right->holder = coder->id;
 }
 
 int	arbiter_try_pair(t_coder *coder, long now)
@@ -79,7 +66,8 @@ int	arbiter_try_pair(t_coder *coder, long now)
 
 	arbiter_lock_pair(coder);
 	grant = grantable(coder, now);
-	set_pair(coder, grant);
+	if (grant)
+		set_pair(coder);
 	arbiter_unlock_pair(coder);
 	return (grant);
 }

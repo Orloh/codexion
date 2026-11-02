@@ -230,6 +230,10 @@ def main():
         binary, ["5", "2000", "200", "200", "200", "3", "50", "edf"],
         5, 3, 200, 200, 200, 50,
     )
+    clean_scenario(
+        binary, ["50", "1000", "100", "100", "100", "5", "10", "edf"],
+        50, 5, 100, 100, 100, 10,
+    )
     if failures:
         print("%d integration checks failed" % len(failures))
         return 1

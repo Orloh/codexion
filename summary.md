@@ -227,7 +227,7 @@ pointer to every thread via `pthread_create`'s argument:
 - `config` (the 8 parsed arguments),
 - `shared`: heap, scratch, stop flag, `finished_counter`, `start_ms`,
   `arrival_counter`, the shared-state mutex, and both condition variables,
-- `dongles[]` (each: `id`, `available_at`, `holder`, `reserved_by`, and its own
+- `dongles[]` (each: `id`, `available_at`, `holder`, and its own
   `pthread_mutex_t`),
 - `coders[]` (each: `id`, `last_compile_start`, `finished`, `compiles_done`),
 - `log_mutex` guarding output,
@@ -243,8 +243,8 @@ There are three kinds of locks:
 - **`shared.mutex`** protects the heap, scratch, stop flag,
   `finished_counter`, `start_ms`, `arrival_counter`, and coder state read by
   the monitor.
-- **Each `dongle.mutex`** protects only that dongle's `holder`,
-  `available_at`, and `reserved_by`.
+- **Each `dongle.mutex`** protects only that dongle's `holder` and
+  `available_at`.
 - **`log_mutex`** protects stdout (`fd 1`).
 
 Lock order is:
@@ -255,8 +255,8 @@ shared.mutex -> dongle mutexes in ascending dongle id order
 
 Never hold a dongle mutex while waiting on a condition variable. The pair-lock
 helpers live in `src/dongle_pair.c`; they lock/unlock the two dongles in canonical
-order, check/grant/reserve a pair, and release a pair. For `N == 1`, the pair
-helpers lock the single unique dongle once.
+order, grant a pair, and release a pair. For `N == 1`, the pair helpers lock the
+single unique dongle once.
 
 The **arbiter is code, not a thread** — it runs under `shared.mutex` when a
 coder requests, when a coder releases, and when a cooldown timeout expires. The
@@ -264,17 +264,15 @@ coder requests, when a coder releases, and when a cooldown timeout expires. The
 
 ### Request and dongle state
 
-- `dongle`: `{ id, available_at, holder, reserved_by, mutex }`;
-  `holder == -1` means free and `reserved_by == -1` means unreserved. A dongle
-  is **grantable** for a request when `holder == -1 && now >= available_at` and
-  it is not reserved for another coder. All access happens under that dongle's
-  mutex.
+- `dongle`: `{ id, available_at, holder, mutex }`; `holder == -1` means free.
+  A dongle is **grantable** for a request when `holder == -1 &&
+  now >= available_at`. All access happens under that dongle's mutex.
 - `request`: coder id + the **priority key snapshotted at enqueue time**:
   - `fifo` → an **arrival counter** (order of request),
   - `edf`  → `last_compile_start + time_to_burnout` evaluated when the request is
     made.
 
-### Grant flow (atomic both-or-none, reservation-aware)
+### Grant flow (atomic both-or-none, work-conserving)
 
 A coder that wants to compile:
 1. Lock `shared.mutex`.
@@ -296,17 +294,15 @@ When a coder **releases** after compiling:
 7. Unlock `shared.mutex`.
 
 `arbiter_run` (called under `shared.mutex`):
-1. Lock each dongle briefly and clear its `reserved_by`.
-2. Pop all queued requests into `table->shared.scratch`; this yields them in
+1. Pop all queued requests into `table->shared.scratch`; this yields them in
    priority order.
-3. Walk `scratch` from highest to lowest priority:
+2. Walk `scratch` from highest to lowest priority:
    - lock the request's two dongles in ascending id order;
-   - if both unique dongles are grantable and neither is reserved, grant both
-     (set `holder`) and **do not push it back**;
-   - otherwise reserve each still-unreserved dongle for this coder and push the
-     request back into the heap;
+   - if both unique dongles are grantable, grant both (set `holder`) and **do
+     not push it back**;
+   - otherwise push the request back into the heap without reserving anything;
    - unlock the pair.
-4. Broadcast `dongle_cond` if at least one request was granted.
+3. Broadcast `dongle_cond` if at least one request was granted.
 
 For `N == 1`, the pair helpers treat `left` and `right` as one unique dongle —
 never count the same pointer twice. Use `pthread_cond_broadcast` (not `signal`);
@@ -323,27 +319,32 @@ granted either: when both needed dongles are free and cooling, use
 later `available_at`**.
 
 The waiter holds `shared.mutex` for the wait. It locks the dongles only briefly
-to inspect `holder`, `available_at`, and `reserved_by`, then unlocks them before
-calling `pthread_cond_timedwait`. On `ETIMEDOUT`, no thread releases at that
-moment, so the waiter must run `arbiter_run` before re-checking. Any early wake
-(grant, release, or stop) just loops.
+to inspect `holder` and `available_at`, then unlocks them before calling
+`pthread_cond_timedwait`. On `ETIMEDOUT`, no thread releases at that moment, so
+the waiter must run `arbiter_run` before re-checking. Any early wake (grant,
+release, or stop) just loops.
 
-### Fairness: reservation-aware strict priority (chosen)
+### Fairness: work-conserving priority scan (chosen)
 
-The chosen policy is **reservation-aware** (see `arbiter_run` above). The
-subject guarantees **nobody burns out under `edf` when parameters are viable**,
-so the EDF path uses **strict priority**: a dongle is **reserved** for the
-earliest-deadline contender and is **not** given to a lower-priority request,
-even if it must idle until the high coder's other dongle frees. Work-conserving
-hand-out without reservations could let a lower request take a shared dongle and
-starve the urgent coder into burnout. `fifo` uses the same reservation rule with
-arrival order.
+The chosen policy is **work-conserving**. Requests are processed in priority
+order, but a request that cannot be granted does **not** reserve dongles. It is
+pushed back into the heap and lower-priority requests whose pairs are currently
+free may still be granted.
+
+This preserves the scheduler order when requests compete for the same free
+dongles: the earliest-deadline (or earliest-arrival) request is considered
+first. At the same time, it avoids a reservation convoy where a single blocked
+request at the front prevents every disjoint pair behind it from running.
+
+The tradeoff is that a lower-priority request may take a free dongle that a
+blocked higher-priority request would eventually need. That is necessary to keep
+the whole table live when many coders start with equal deadlines. `fifo` uses the
+same work-conserving scan with arrival order.
 
 Serving **disjoint** pairs (different dongles) never delays a higher-priority
-coder, so concurrency across independent pairs is preserved. This is why the
-arbiter scans the whole queue in priority order instead of stopping at the first
-blocked request. The distinction is only observable with `N >= 4`: for `N <= 3`,
-every pair of coders shares at least one dongle.
+coder, so concurrency across independent pairs is preserved. The distinction is
+only observable with `N >= 4`: for `N <= 3`, every pair of coders shares at least
+one dongle.
 
 ### Relation to "coders don't communicate"
 
@@ -477,7 +478,6 @@ typedef struct s_dongle {
     int   id;
     long  available_at;                /* ms when cooldown ends (drop time) */
     int   holder;                      /* coder id, or -1 if free */
-    int   reserved_by;                 /* coder id, or -1; transient */
     pthread_mutex_t mutex;             /* protects this dongle only */
 } t_dongle;
 
@@ -528,11 +528,7 @@ typedef struct s_table {
 - **`config` is immutable** parsed input; `start_ms` and the arrival counter are
   **runtime state** and live in `t_shared`, not in `config`.
 - **`dongle`**: `holder == -1` means free; grantable = `holder == -1 &&
-  now >= available_at && reserved_by == -1`. Every field is accessed under that
-  dongle's `mutex`.
-- **`dongle.reserved_by`** is transient: it is reset at the start of every
-  `arbiter_run` and prevents lower-priority requests from taking a dongle that a
-  higher-priority blocked request needs.
+  now >= available_at`. Every field is accessed under that dongle's `mutex`.
 - **`scratch`** is an array of `number_of_coders` requests used only while the
   arbiter pops the heap in priority order; it lives in `t_shared` and is not part
   of the waiting queue.
@@ -609,27 +605,24 @@ Both policies use "**smaller key wins**" (min-heap):
 **Tie-break**: equal keys → smaller **coder id** wins (only relevant for `edf`;
 `fifo` keys are unique via the monotonic counter).
 
-### Use by the arbiter (reservation-aware)
+### Use by the arbiter (work-conserving)
 
 `arbiter_run` is called after an enqueue, after a release, and when a cooldown
 timeout expires. Under `shared.mutex`:
 
-1. Lock each dongle briefly and reset its `reserved_by` to `-1`.
-2. Pop all requests from the heap into `shared.scratch`; this yields them in
+1. Pop all requests from the heap into `shared.scratch`; this yields them in
    priority order.
-3. Walk `scratch` from highest to lowest priority:
+2. Walk `scratch` from highest to lowest priority:
    - lock the request's two dongles in ascending id order;
-   - grant a request if both its unique dongles are grantable and
-     `reserved_by == -1`;
-   - otherwise reserve each still-unreserved dongle for this coder and push the
-     request back into the heap;
+   - grant a request if both its unique dongles are grantable;
+   - otherwise push the request back into the heap without reserving anything;
    - unlock the pair.
-4. Broadcast `dongle_cond` if at least one request was granted.
+3. Broadcast `dongle_cond` if at least one request was granted.
 
-A blocked high-priority request keeps its dongles reserved, so lower requests
-that share them wait. A lower request whose pair is completely disjoint still
-gets granted. This is the reservation-aware rule chosen in the Fairness
-section; the older "stop at the first blocked root" behavior is **not** used.
+A blocked high-priority request does not reserve its dongles. Lower requests
+whose pairs are currently free may still be granted. This work-conserving scan
+is what prevents a blocked request at the front from serializing the whole
+table.
 
 ## Main flow & initialization
 
@@ -706,7 +699,7 @@ codexion/
 ```
 
 `src/dongle_pair.c` contains the pair-lock helpers used by the arbiter and coder:
-canonical pair locking, pair grant/reserve, and pair release.
+canonical pair locking, pair grant, and pair release.
 
 Binary name: **`codexion`**.
 
@@ -754,7 +747,7 @@ Binary name: **`codexion`**.
 
 1. **"Blocking cases handled"** — document the five concurrency issues:
    - deadlock prevention and Coffman's conditions,
-   - starvation prevention (EDF / strict-priority reservation),
+   - starvation prevention (EDF/FIFO work-conserving priority),
    - cooldown handling,
    - precise burnout detection (≤ 10 ms),
    - log serialization.
@@ -799,9 +792,10 @@ implementation and tests. The user understands and is responsible for all of it.
 - 1 coder / 1 dongle (one `has taken a dongle` per compile), cycles `n` times,
   no deadlock.
 - 2 coders — the exact ring-deadlock configuration; both must compile.
-- 4 coders — reservation-aware check: a lower-priority request with a fully
-  disjoint pair must compile while a higher-priority request is blocked; a lower
-  request sharing a reserved dongle must wait.
+- 4 coders — work-conserving check: a blocked high-priority pair must not
+  prevent a lower request whose own pair is free from running.
+- 50 coders — work-conserving stress: all coders complete the required compiles
+  without a reservation convoy reducing the table to one coder.
 - Complete-all path: each coder prints exactly `n` `is compiling` lines, no
   `burned out`, exit code 0.
 - Burnout path: exactly **one** `burned out` line, nothing logged after it.

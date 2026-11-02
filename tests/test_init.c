@@ -44,7 +44,6 @@ void	test_init(void)
 	CHECK(table->dongles[0].id == 0);
 	CHECK(table->dongles[0].available_at == table->shared.start_ms);
 	CHECK(table->dongles[0].holder == -1);
-	CHECK(table->dongles[0].reserved_by == -1);
 	CHECK(table->coders[0].table == table);
 	CHECK(table->coders[0].id == 1);
 	CHECK(table->coders[0].last_compile_start == table->shared.start_ms);
@@ -67,7 +66,6 @@ void	test_init(void)
 		CHECK(table->dongles[i].id == i);
 		CHECK(table->dongles[i].available_at == table->shared.start_ms);
 		CHECK(table->dongles[i].holder == -1);
-		CHECK(table->dongles[i].reserved_by == -1);
 		CHECK(table->coders[i].table == table);
 		CHECK(table->coders[i].id == i + 1);
 		CHECK(table->coders[i].last_compile_start == table->shared.start_ms);
